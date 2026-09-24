@@ -633,7 +633,7 @@ bool NightmatiqMesh::restore_target_node_() {
   // NightmatIQ Plus has three elements in the authenticated Steinel backup.
   // The provisioner checks this range before it permits any unicast Access
   // message or accepts a response from the device.
-  node.element_num = 3;
+  node.element_num = 4;  // L42 SC / L 810 SC : 4 elements
   node.net_idx = this->config_.net_key_index;
   node.flags = 0;
   node.iv_index = this->config_.iv_index;
@@ -985,6 +985,12 @@ void NightmatiqMesh::mark_ready_() {
   this->ready_publish_pending_.store(true);
   this->set_status_("Mesh client ready; polling NightmatIQ");
   ESP_LOGI(TAG, "NightmatIQ mesh keys imported and all client models bound");
+  {
+    const esp_err_t sub_err = esp_ble_mesh_model_subscribe_group_addr(
+        esp_ble_mesh_get_primary_element_address(), ESP_BLE_MESH_CID_NVAL,
+        ESP_BLE_MESH_MODEL_ID_SENSOR_CLI, 0xC001);
+    ESP_LOGI(TAG, "Abonnement groupe 0xC001 (mouvement) : %d", (int) sub_err);
+  }
   if (this->device_key_valid_) {
     this->composition_query_attempts_.store(0);
     this->composition_query_failures_.store(0);
@@ -1271,14 +1277,39 @@ bool NightmatiqMesh::send_composition_get_() {
 bool NightmatiqMesh::send_sensor_get_() {
   esp_ble_mesh_client_common_param_t common{};
   esp_ble_mesh_sensor_client_get_state_t get{};
+  // Luminosite : element 3 (onoff + 3), propriete 0x004E (L42 SC / L 810 SC)
   if (!this->set_common_(common, sensor_client.model, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
-                         this->config_.sensor_address))
+                         static_cast<uint16_t>(this->config_.onoff_address + 3)))
     return false;
   if (!this->begin_access_operation_(AccessOperation::SENSOR_GET,
                                      ESP_BLE_MESH_MODEL_OP_SENSOR_GET))
     return false;
   get.sensor_get.op_en = true;
   get.sensor_get.property_id = AMBIENT_LIGHT_LEVEL_PROPERTY;
+  return this->record_access_send_result_(
+      AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
+      esp_ble_mesh_sensor_client_get_state(&common, &get));
+}
+
+void NightmatiqMesh::poll_motion() {
+  if (!this->mesh_ready_.load() || this->poll_stage_ != 0 ||
+      this->access_operation_.load() != AccessOperation::NONE ||
+      this->control_kind_ != ControlKind::NONE || this->control_request_pending_())
+    return;
+  this->send_motion_get_();
+}
+
+bool NightmatiqMesh::send_motion_get_() {
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_sensor_client_get_state_t get{};
+  if (!this->set_common_(common, sensor_client.model, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
+                         static_cast<uint16_t>(this->config_.onoff_address + 2)))
+    return false;
+  if (!this->begin_access_operation_(AccessOperation::SENSOR_GET,
+                                     ESP_BLE_MESH_MODEL_OP_SENSOR_GET))
+    return false;
+  get.sensor_get.op_en = true;
+  get.sensor_get.property_id = 0x0042;  // Motion Sensed
   return this->record_access_send_result_(
       AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
       esp_ble_mesh_sensor_client_get_state(&common, &get));
@@ -1791,6 +1822,14 @@ void NightmatiqMesh::sensor_callback(esp_ble_mesh_sensor_client_cb_event_t event
     const size_t value_length = static_cast<size_t>(encoded_length) + 1;
     if (remaining < mpid_length + value_length)
       break;
+    {
+      char hex[3 * 16 + 1] = {0};
+      const size_t shown = value_length < 16 ? value_length : 16;
+      for (size_t k = 0; k < shown; k++)
+        std::snprintf(hex + 3 * k, 4, "%02X ", data[mpid_length + k]);
+      ESP_LOGV(TAG, "DIAG_SENSOR src=0x%04X prop=0x%04X len=%u val=%s",
+               param->params->ctx.addr, property_id, (unsigned) value_length, hex);
+    }
     if (property_id == AMBIENT_LIGHT_LEVEL_PROPERTY && value_length >= 3) {
       const uint8_t *value = data + mpid_length;
       const uint32_t centilux = static_cast<uint32_t>(value[0]) |
@@ -1799,6 +1838,9 @@ void NightmatiqMesh::sensor_callback(esp_ble_mesh_sensor_client_cb_event_t event
       self->pending_lux_centilux_.store(centilux);
       self->lux_received_.store(true);
       self->lux_publish_pending_.store(true);
+    } else if (property_id == 0x0042 && value_length >= 1) {
+      if (param->params->ctx.addr == static_cast<uint16_t>(self->config_.onoff_address + 2))
+        self->motion_raw_.store(data[mpid_length]);
     } else if (property_id == 0x000E && value_length >= 1) {
       self->live_firmware_revision_.store(data[mpid_length]);
     } else if (property_id == 0x0010 && value_length >= 1) {

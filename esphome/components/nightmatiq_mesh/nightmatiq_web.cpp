@@ -28,7 +28,10 @@
 #include "esphome/core/version.h"
 #include "esphome/components/api/api_server.h"
 #include "esphome/components/network/util.h"
+#include "esphome/core/defines.h"
+#ifdef USE_WIFI
 #include "esphome/components/wifi/wifi_component.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mbedtls/base64.h"
@@ -1465,10 +1468,12 @@ void NightmatiqMesh::handle_status_(AsyncWebServerRequest *request) {
   body.append(",\"factory_password\":");
   body.append(this->using_factory_admin_password_ ? "true" : "false");
   body.append(",\"connected_ssid\":\"");
+#ifdef USE_WIFI
   if (wifi::global_wifi_component != nullptr) {
     const auto configured_sta = wifi::global_wifi_component->get_sta();
     body.escaped(configured_sta.get_ssid().c_str());
   }
+#endif
   body.append("\"");
   body.append(",\"gateway_version\":\"");
   body.append(ESPHOME_PROJECT_VERSION);
@@ -1818,6 +1823,7 @@ void NightmatiqMesh::handle_wifi_(AsyncWebServerRequest *request) {
     return send_json_(request, 400,
                       "{\"message\":\"SSID must contain 1-32 bytes and the Wi-Fi password must contain 8-63 printable characters\"}");
   }
+#ifdef USE_WIFI
   if (wifi::global_wifi_component == nullptr) {
     std::fill(password.begin(), password.end(), '\0');
     return send_json_(request, 500, "{\"message\":\"Wi-Fi component is not available\"}");
@@ -1830,6 +1836,7 @@ void NightmatiqMesh::handle_wifi_(AsyncWebServerRequest *request) {
     this->reboot_at_ = millis() + 2000;
     this->reboot_pending_.store(true);
   });
+#endif
   send_json_(request, 200,
              "{\"message\":\"Wi-Fi configuration saved; gateway is restarting\"}");
 }

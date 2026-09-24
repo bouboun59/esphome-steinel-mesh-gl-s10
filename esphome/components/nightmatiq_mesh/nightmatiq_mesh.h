@@ -76,6 +76,8 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   void set_threshold(float lux);
   void set_mode(const std::string &mode);
   void request_refresh();
+  void poll_motion();
+  int motion_raw() const { return this->motion_raw_.load(); }
   bool mesh_mode_enabled() const { return this->mesh_mode_enabled_; }
 
   static void provisioning_callback(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t *param);
@@ -352,6 +354,7 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
                    uint32_t opcode, uint16_t destination);
   bool record_send_result_(esp_err_t result);
   bool begin_access_operation_(AccessOperation operation, uint32_t opcode);
+  bool send_motion_get_();
   bool record_access_send_result_(AccessOperation operation, uint32_t opcode, esp_err_t result);
   bool complete_access_operation_(uint32_t opcode, bool success);
   void expire_access_operation_(uint32_t now);
@@ -482,6 +485,7 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   uint32_t reboot_at_{0};
 
   std::atomic<bool> mesh_ready_{false};
+  std::atomic<int> motion_raw_{-1};
   uint32_t mesh_ready_at_{0};
   bool address_recovery_attempted_this_boot_{false};
   std::atomic<uint32_t> live_iv_index_{0};
