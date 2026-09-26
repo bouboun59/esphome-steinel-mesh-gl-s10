@@ -897,8 +897,11 @@ bool NightmatiqMesh::save_admin_password_(const std::string &password) {
 }
 
 void NightmatiqMesh::apply_admin_credentials_() {
-  this->base_->set_auth_username(this->web_username_);
-  this->base_->set_auth_password(this->web_password_);
+  // ESPHome >= 2026.9 ne copie plus les identifiants (pointeurs) : tampons fixes, jamais realloues
+  std::snprintf(this->auth_username_buf_, sizeof(this->auth_username_buf_), "%s", this->web_username_.c_str());
+  std::snprintf(this->auth_password_buf_, sizeof(this->auth_password_buf_), "%s", this->web_password_.c_str());
+  this->base_->set_auth_username(this->auth_username_buf_);
+  this->base_->set_auth_password(this->auth_password_buf_);
   if (this->ota_ != nullptr)
     this->ota_->set_auth_password(this->web_password_);
 }

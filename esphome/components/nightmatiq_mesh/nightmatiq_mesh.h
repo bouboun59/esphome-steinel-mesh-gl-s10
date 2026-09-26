@@ -429,6 +429,8 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   bool send_lc_threshold_set_to_(ExtraLamp &lamp, uint32_t centilux);
   bool all_extra_identities_found_() const;
   uint16_t primary_tag_{0};
+  char auth_username_buf_[64]{};
+  char auth_password_buf_[72]{};
   std::string primary_name_;
   uint32_t last_published_threshold_{0xFFFFFFFF};
   int8_t last_published_mode_{-1};
