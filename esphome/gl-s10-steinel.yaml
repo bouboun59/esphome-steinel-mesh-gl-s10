@@ -149,6 +149,8 @@ nightmatiq_mesh:
 
 logger:
   level: DEBUG
+  logs:
+    esp-idf: INFO
 
 api:
   id: api_server
@@ -299,7 +301,8 @@ sensor:
       last = v;
       return v;
     filters:
-      - delta: 3
+      - throttle_average: 60s
+      - delta: 2
   - platform: template
     name: "Applique Garage Mouvement niveau"
     unit_of_measurement: "%"
@@ -340,7 +343,8 @@ sensor:
       last = v;
       return v;
     filters:
-      - delta: 3
+      - throttle_average: 60s
+      - delta: 2
   - platform: template
     name: "Applique Devant Luminosité"
     device_class: illuminance
@@ -389,7 +393,8 @@ sensor:
   - platform: template
     id: nightmatiq_rssi
     filters:
-      - delta: 3
+      - throttle_average: 60s
+      - delta: 2
     name: "Applique Entrée Signal"
     device_class: signal_strength
     state_class: measurement
