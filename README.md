@@ -30,13 +30,15 @@ This fork adapts the project to a different use case:
 3. [How Steinel luminaires are organised in the mesh](#3-how-steinel-luminaires-are-organised-in-the-mesh)
 4. [Architecture of the multi-lamp gateway](#4-architecture-of-the-multi-lamp-gateway)
 5. [Entities exposed per luminaire](#5-entities-exposed-per-luminaire)
-6. [Build and first installation](#6-build-and-first-installation)
-7. [Configuring your own luminaires](#7-configuring-your-own-luminaires)
-8. [Home Assistant layer](#8-home-assistant-layer)
-9. [Lessons learned and troubleshooting](#9-lessons-learned-and-troubleshooting)
-10. [Known limitations and roadmap](#10-known-limitations-and-roadmap)
-11. [Security](#11-security)
-12. [License and credits](#12-license-and-credits)
+6. [Web interface of the gateway](#6-web-interface-of-the-gateway)
+7. [Build and installation from a computer (macOS / Linux)](#7-build-and-installation-from-a-computer-macos--linux)
+8. [ESPHome Device Builder (Home Assistant)](#8-esphome-device-builder-home-assistant)
+9. [Configuring your own luminaires](#9-configuring-your-own-luminaires)
+10. [Home Assistant layer](#10-home-assistant-layer)
+11. [Lessons learned and troubleshooting](#11-lessons-learned-and-troubleshooting)
+12. [Known limitations and roadmap](#12-known-limitations-and-roadmap)
+13. [Security](#13-security)
+14. [License and credits](#14-license-and-credits)
 
 ---
 
@@ -54,6 +56,8 @@ This fork adapts the project to a different use case:
 | Identity | NightmatIQ only | firmware / hardware revision of **every lamp**, read from BLE advertisements |
 | HA traffic | values re-sent every few seconds | values sent **only when they change**, checked every second |
 | Diagnostics | — | optional **Steinel vendor-message sniffer** (group `0xFEFF`) |
+| Web interface | NightmatIQ page (one lamp), update from GitHub | **multi-lamp dashboard + advanced page, FR/EN**, firmware upload; GitHub update (ESP32-C3) disabled |
+| Build | command line | **macOS / Linux** command line or **ESPHome Device Builder** in Home Assistant |
 | LEDs | status LED only (off when healthy) | **3 meaningful LEDs**: power, network/Home Assistant, Bluetooth Mesh |
 | Home Assistant | device entities | + **template lights with brightness slider**, **dashboard tab**, **brightness-keeping automation** |
 
@@ -125,14 +129,14 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 | Motion (element 2) | group **`0xC001`** (shared by all lamps) | ~4 s + on change |
 | Illuminance (element 3) | group **`0xC000`** | ~10 s |
 | Time (`1200`) | `0xFFFF` | — |
-| Vendor model `0563:1005` (element 1) | group **`0xFEFF`** | not observed on state changes (see §10) |
+| Vendor model `0563:1005` (element 1) | group **`0xFEFF`** | not observed on state changes (see §12) |
 | **Light on/off, lightness, LC state** | **nothing** | → must be polled |
 
 ### Useful facts
 
 - The **Auto** mode of the Steinel app = *LC mode enabled* + **recall of scene 3** ("Nightmatic").
   A Bluetooth Mesh scene also stores the **LC properties**: recalling it **resets the detector
-  brightness** to the value saved by the Steinel app (93 % here). See §8.3.
+  brightness** to the value saved by the Steinel app (93 % here). See §10.3.
 - Detector settings are standard **Light LC properties** on element 1:
   `0x002B` ambient lux level on (threshold), `0x002E` lightness on ("power"),
   `0x0030` lightness standby ("standby light"), `0x003C` time run on ("hold time").
@@ -180,6 +184,8 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 - `0xFFFFFF` illuminance ignored; primary Mode and Threshold published only when they change.
 - Motion: `poll_motion()` (fallback, every 6th call) and primary on/off polling.
 - Faster interleaved polling of extra lamps (one lamp then the other, every 1.5 s).
+- Web interface: embedded *Dashboard* and *Advanced* pages (`steinel_dashboard.h`, `steinel_advanced.h`), JSON route `/steinel/lamps`, `set_primary_name()` / `set_lamp_name()`, GitHub update disabled.
+- Steinel vendor-message listener (vendor model `0563:1FFF`, 64 opcodes, group `0xFEFF`).
 
 ### YAML changes (`esphome/gl-s10-steinel.yaml`)
 
@@ -189,6 +195,7 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 - Template entities for every lamp, published **only on change** (`static last` pattern, `update_interval: 1s`).
 - Motion `delayed_off` filter (10 s by default) — lamps report *instantaneous* motion.
 - Signal strength filtered (`delta: 3` dB).
+- `ota: - platform: web_server` to upload firmware from the web page.
 - LED logic (250 ms interval): network LED from Ethernet / Home Assistant / error state, Bluetooth LED from *Mesh Ready*.
 
 ---
@@ -215,61 +222,165 @@ Gateway entities: *Mesh Ready*, *Status*, *Refresh*, *Safe Mode Boot*, *Reset Bu
 
 ---
 
-## 6. Build and first installation
+## 6. Web interface of the gateway
 
-### Requirements
+Open `http://<gateway-ip>` (login `admin` + your admin password). Both pages are **bilingual French / English**
+(automatic from the browser language, **FR | EN** button, choice remembered) and share the same navigation tabs.
 
-- **ESPHome 2026.7.3** (the component requires it). On macOS:
-  ```bash
-  brew install python@3.13
-  python3.13 -m venv ~/esphome-steinel && source ~/esphome-steinel/bin/activate
-  pip install --upgrade pip wheel && pip install "esphome==2026.7.3"
-  ```
-  On an **Intel Mac**, `cbor2` may need Rust: `brew install rust` then re-run `pip install`.
-- Your Steinel Connect account (e-mail / password) and the lamps already set up in the Steinel app.
+| Page | URL | Content |
+|---|---|---|
+| **Dashboard** | `/` | Mesh network summary, one card per lamp (mode, light, intensity, motion, illuminance, threshold, signal, firmware), **firmware upload** (`firmware.ota.bin`, progress bar, waits for the restart). Refreshed every 2 s. |
+| **Advanced** | `/steinel/avance` | Gateway (Mesh state, runtime mode, firmware, uptime, reset reason, memory, admin password state), Mesh counters, **table of all lamps** (role, address range, firmware, signal), Steinel network (import / suspend / resume / remove), admin password, refresh, factory reset. |
+| Original page | `/steinel/classique` | The upstream NightmatIQ page, kept as a fallback. |
+| JSON | `/steinel/lamps`, `/steinel/status` | Machine-readable state. |
 
-### Secrets
-
-Create `esphome/secrets.yaml` (never commit it):
-```yaml
-ota_password: "the admin password you will set in the gateway web UI"
-api_encryption_key: "…"   # optional, see §11
-```
-> The component **aligns the OTA password with the web admin password**: after changing the
-> admin password in the web UI, OTA uploads require that same password in `secrets.yaml`.
-
-### Build
-
-```bash
-cd esphome
-esphome compile gl-s10-steinel.yaml
-```
-
-### First flash (serial)
-
-```bash
-esptool --port /dev/cu.usbserial-XXXX --baud 115200 --before no-reset --after no-reset \
-        --chip esp32 write-flash -z 0x0 .esphome/build/gl-s10-steinel/build/firmware.factory.bin
-```
-(flash mode: button next to the 9-hole header held while powering the GL-S10.)
-
-Then connect Ethernet: the gateway gets an address by DHCP. Later updates go over the network:
-```bash
-esphome run gl-s10-steinel.yaml --device <gateway-ip>
-```
-
-### Initial setup (web UI)
-
-1. Open `http://<gateway-ip>`, log in with `admin` / `12345678`, **change the admin password**.
-2. Enter your Steinel account, download the networks, choose your network.
-3. **Node**: type the address of your **primary** lamp (e.g. `000F`). In automatic mode the
-   firmware picks the first compatible node.
-4. IV Index `0` (automatic) → **Install**.
-5. Add the device in Home Assistant (ESPHome integration).
+- Firmware upload uses ESPHome's `ota: - platform: web_server` (`/update`), protected by the admin login.
+- The upstream **automatic update from GitHub is disabled**: it downloads the ESP32-C3 firmware, which is not
+  compatible with the GL-S10.
 
 ---
 
-## 7. Configuring your own luminaires
+## 7. Build and installation from a computer (macOS / Linux)
+
+### 7.1 Requirements
+
+The component requires **ESPHome ≥ 2026.7.3** (tested with 2026.7.3).
+
+**macOS** (Homebrew):
+```bash
+brew install python@3.13 git
+python3.13 -m venv ~/esphome-steinel
+source ~/esphome-steinel/bin/activate
+pip install --upgrade pip wheel
+pip install "esphome==2026.7.3"
+```
+On an **Intel Mac**, `cbor2` may need to be built: `brew install rust`, then run `pip install` again.
+
+**Linux** (Debian / Ubuntu / Raspberry Pi OS):
+```bash
+sudo apt update && sudo apt install -y python3-venv python3-pip git
+python3 -m venv ~/esphome-steinel
+source ~/esphome-steinel/bin/activate
+pip install --upgrade pip wheel
+pip install "esphome==2026.7.3"
+sudo usermod -aG dialout "$USER"   # serial port access (log out / in afterwards)
+```
+
+Get the code:
+```bash
+git clone -b gl-s10-multilamp https://github.com/bouboun59/esphome-steinel-mesh-gl-s10.git
+cd esphome-steinel-mesh-gl-s10/esphome
+```
+
+### 7.2 Secrets
+
+Create `esphome/secrets.yaml` (**never commit it**, it is ignored by `.gitignore`):
+```yaml
+ota_password: "the admin password of the gateway web page"
+api_encryption_key: "…"   # optional, see §13
+```
+> The component **aligns the OTA password with the web admin password**: after changing the admin password in
+> the web UI, OTA uploads require that same password in `secrets.yaml`.
+
+### 7.3 Build
+
+```bash
+source ~/esphome-steinel/bin/activate
+esphome compile gl-s10-steinel.yaml
+```
+The first build downloads ESP-IDF and takes 10–30 minutes.
+
+### 7.4 First flash (serial)
+
+Serial port name: macOS `/dev/cu.usbserial-XXXX` or `/dev/cu.wchusbserial-XXXX` (`ls /dev/cu.*`),
+Linux `/dev/ttyUSB0` (`ls /dev/ttyUSB*`). Put the GL-S10 in flash mode (button next to the 9-hole header held
+while powering it), then:
+
+```bash
+esptool --port <PORT> --baud 115200 --before no-reset --after no-reset --chip esp32 \
+        write-flash -z 0x0 .esphome/build/gl-s10-steinel/build/firmware.factory.bin
+```
+Unplug / replug the power **without** the button. The gateway gets an address by DHCP (or the fixed one, §7.7).
+
+### 7.5 Updates over the network
+
+```bash
+esphome run gl-s10-steinel.yaml --device <gateway-ip>
+```
+or upload `.esphome/build/gl-s10-steinel/build/firmware.ota.bin` from the **Dashboard** web page.
+
+### 7.6 Initial setup (web UI)
+
+1. Open `http://<gateway-ip>`, log in with `admin` / `12345678`, then **Advanced → Security**: change the admin
+   password (and copy it to `ota_password`).
+2. **Advanced → Steinel network**: enter your Steinel Connect account, find your networks, choose yours.
+3. **Primary lamp address**: e.g. `000F` (empty = first compatible node). IV Index `0` → **Install**.
+4. Add the device in Home Assistant (ESPHome integration).
+
+### 7.7 Fixed IP address (optional)
+
+Add `manual_ip` to the `ethernet:` block. For the upload that changes the address, keep
+`use_address: <current address>`, then remove it:
+```yaml
+ethernet:
+  # … existing settings (id, type, pins) …
+  manual_ip:
+    static_ip: 192.168.1.238
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.2
+    dns2: 192.168.1.1
+  use_address: 192.168.1.58   # only for this upload
+```
+Alternative without firmware change: a DHCP reservation on your router for the gateway MAC address.
+
+### 7.8 macOS / zsh tips
+
+- Pasting commands with `# comments` may fail in zsh: `echo 'setopt interactivecomments' >> ~/.zshrc`.
+- In a *heredoc* (`<<'EOF'`), the closing `EOF` must be at the very beginning of the line.
+- Passwords with special characters: `read -rs 'PW?Password: '` then use `"$PW"`.
+
+---
+
+## 8. ESPHome Device Builder (Home Assistant)
+
+You can build and install the gateway **directly from Home Assistant** (tested: Device Builder 2026.9.0).
+The component is downloaded from GitHub at every build, so the only file in Home Assistant is the YAML.
+
+1. **Device Builder → Secrets**: add
+   ```yaml
+   ota_password: "<gateway admin password>"
+   api_encryption_key: "<base64 key, e.g. the one generated by Device Builder>"
+   ```
+2. **+ New device** (skip the wizard) named `gl-s10-steinel`, **Edit**, replace **everything** with
+   [`esphome/device-builder/gl-s10-steinel.yaml`](esphome/device-builder/gl-s10-steinel.yaml). Its
+   `external_components` block points to this repository:
+   ```yaml
+   external_components:
+     - source:
+         type: git
+         url: https://github.com/bouboun59/esphome-steinel-mesh-gl-s10
+         ref: gl-s10-multilamp
+         path: esphome/components
+       components: [nightmatiq_mesh]
+       refresh: 0s
+   ```
+3. Adapt the `on_boot` lambda (your lamps) and, if needed, the fixed IP (§7.7).
+4. If Device Builder asks for the board, choose **DOIT ESP32 DEVKIT V1** (`esp32doit-devkit-v1`).
+5. **Install → Wirelessly** (the first build on the Home Assistant host takes 10–30 minutes and needs ~2 GB RAM).
+6. With API encryption enabled, Home Assistant asks for the key once
+   (*Settings → Devices & services → ESPHome → Reconfigure*).
+
+> ⚠️ Never install the default template created by the Device Builder wizard on the GL-S10 (`esp32dev`, Wi-Fi
+> only): the gateway would lose Ethernet and Mesh, and would have to be re-flashed over serial.
+
+**Workflow**: change the code on a computer → `git commit` / `git push` → **Install** in Device Builder.
+Use one tool to flash (Device Builder **or** the command line) to avoid mixing versions.
+When the repository YAML changes, apply the same change to the Device Builder YAML.
+
+---
+
+## 9. Configuring your own luminaires
 
 All the information comes from your Steinel backup. Download it (same endpoints as the web UI):
 
@@ -325,12 +436,12 @@ Tested installation, for reference:
 
 ---
 
-## 8. Home Assistant layer
+## 10. Home Assistant layer
 
 Example files are in [`home-assistant/gl-s10/`](home-assistant/gl-s10/). Entity IDs depend on the
 names you give to the device and entities: adjust them.
 
-### 8.1 Dimmable light per luminaire (template light)
+### 10.1 Dimmable light per luminaire (template light)
 
 The gateway exposes *Mode* and *Intensity* separately. A **template light** turns them into a
 real HA light with a brightness slider ([`template-lights.yaml`](home-assistant/gl-s10/template-lights.yaml),
@@ -344,13 +455,13 @@ or create them from *Settings → Devices & services → Helpers → Template �
 The intensity is sent **before** switching to *Always On*: a Generic OnOff Set restores the
 last lightness, so the lamp goes straight to the requested level without flashing.
 
-### 8.2 Dashboard tab
+### 10.2 Dashboard tab
 
 [`dashboard-view.yaml`](home-assistant/gl-s10/dashboard-view.yaml) — a *sections* view with, for
 each luminaire: the light tile with its brightness slider, motion, illuminance and the mode buttons.
 Add it via *Dashboard → edit → + (new view) → ⋮ → Edit in YAML*.
 
-### 8.3 Keeping the chosen brightness
+### 10.3 Keeping the chosen brightness
 
 Because **Auto recalls scene 3**, the detector brightness (*Power*) goes back to the Steinel value
 each time a lamp returns to Auto. The fix:
@@ -364,7 +475,7 @@ Result: the brightness you choose is used for manual switching **and** by the de
 
 ---
 
-## 9. Lessons learned and troubleshooting
+## 11. Lessons learned and troubleshooting
 
 | Symptom | Cause / solution |
 |---|---|
@@ -375,14 +486,14 @@ Result: the brightness you choose is used for manual switching **and** by the de
 | Illuminance shows 167 772 lx | `0xFFFFFF` = unknown value → now ignored. |
 | Motion flickers on/off | Lamps report instantaneous motion → `delayed_off` (10 s by default). |
 | `Authentication invalid` during OTA | OTA password = web admin password → put it in `secrets.yaml`. |
-| Brightness goes back to 93 % | Scene 3 recalled by Auto → §8.3. |
+| Brightness goes back to 93 % | Scene 3 recalled by Auto → §10.3. |
 | Manual switch-on very dim | Generic OnOff restores the *last* lightness → the template light now sets the intensity first. |
 | `No outbound bearer found, inbound bearer 0` | Harmless: relayed packets the gateway does not retransmit. |
 | Occasional `request timed out` on L 810 | Weak signal (-85…-97 dBm) → place the GL-S10 closer or between the lamps; lamps relay each other. |
 
 ---
 
-## 10. Known limitations and roadmap
+## 12. Known limitations and roadmap
 
 - **Detector-driven light changes are polled** (3–6 s): the lamps do not publish their on/off state.
   Changes made from Home Assistant are shown instantly.
@@ -397,7 +508,7 @@ Result: the brightness you choose is used for manual switching **and** by the de
 
 ---
 
-## 11. Security
+## 13. Security
 
 - **Never commit** `secrets.yaml` or `steinel-backup.json` (network keys, device keys).
 - The gateway stores the Steinel network keys: keep it on a trusted / IoT VLAN.
@@ -407,7 +518,7 @@ Result: the brightness you choose is used for manual switching **and** by the de
 
 ---
 
-## 12. License and credits
+## 14. License and credits
 
 - License: **GNU GPL v3.0**, inherited from the original project (see [`LICENSE`](LICENSE)).
   In accordance with GPL-3.0 §5, files modified in this fork are listed in this README (§4) and in the

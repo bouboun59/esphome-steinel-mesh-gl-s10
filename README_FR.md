@@ -30,13 +30,15 @@ Ce fork adapte le projet à un autre usage :
 3. [Organisation des luminaires Steinel dans le réseau Mesh](#3-organisation-des-luminaires-steinel-dans-le-réseau-mesh)
 4. [Architecture de la passerelle multi-lampes](#4-architecture-de-la-passerelle-multi-lampes)
 5. [Entités exposées par luminaire](#5-entités-exposées-par-luminaire)
-6. [Compilation et première installation](#6-compilation-et-première-installation)
-7. [Configurer vos propres luminaires](#7-configurer-vos-propres-luminaires)
-8. [Couche Home Assistant](#8-couche-home-assistant)
-9. [Retour d'expérience et dépannage](#9-retour-dexpérience-et-dépannage)
-10. [Limites connues et pistes](#10-limites-connues-et-pistes)
-11. [Sécurité](#11-sécurité)
-12. [Licence et remerciements](#12-licence-et-remerciements)
+6. [Interface web de la passerelle](#6-interface-web-de-la-passerelle)
+7. [Compilation et installation depuis un ordinateur (macOS / Linux)](#7-compilation-et-installation-depuis-un-ordinateur-macos--linux)
+8. [ESPHome Device Builder (Home Assistant)](#8-esphome-device-builder-home-assistant)
+9. [Configurer vos propres luminaires](#9-configurer-vos-propres-luminaires)
+10. [Couche Home Assistant](#10-couche-home-assistant)
+11. [Retour d'expérience et dépannage](#11-retour-dexpérience-et-dépannage)
+12. [Limites connues et pistes](#12-limites-connues-et-pistes)
+13. [Sécurité](#13-sécurité)
+14. [Licence et remerciements](#14-licence-et-remerciements)
 
 ---
 
@@ -54,6 +56,8 @@ Ce fork adapte le projet à un autre usage :
 | Identité | NightmatIQ seulement | firmware / révision matérielle de **chaque lampe**, lus dans les annonces BLE |
 | Trafic vers HA | valeurs renvoyées toutes les quelques secondes | valeurs envoyées **seulement quand elles changent**, vérifiées chaque seconde |
 | Diagnostic | — | **écoute des messages propriétaires Steinel** (groupe `0xFEFF`), optionnelle |
+| Interface web | page NightmatIQ (une lampe), mise à jour depuis GitHub | **tableau de bord + page Avancé multi-lampes, FR/EN**, chargement du firmware ; mise à jour GitHub (ESP32-C3) désactivée |
+| Compilation | ligne de commande | ligne de commande **macOS / Linux** ou **ESPHome Device Builder** dans Home Assistant |
 | LEDs | LED de statut seulement (éteinte quand tout va bien) | **3 LEDs parlantes** : alimentation, réseau/Home Assistant, Bluetooth Mesh |
 | Home Assistant | entités de l'appareil | + **lumières modèles avec curseur**, **onglet de tableau de bord**, **automatisation de conservation de l'intensité** |
 
@@ -125,14 +129,14 @@ Tout ce qui suit a été lu dans la sauvegarde cloud Steinel (`/project/network/
 | Mouvement (élément 2) | groupe **`0xC001`** (commun à toutes les lampes) | ~4 s + à chaque changement |
 | Luminosité (élément 3) | groupe **`0xC000`** | ~10 s |
 | Heure (`1200`) | `0xFFFF` | — |
-| Modèle fabricant `0563:1005` (élément 1) | groupe **`0xFEFF`** | non observé lors des changements d'état (voir §10) |
+| Modèle fabricant `0563:1005` (élément 1) | groupe **`0xFEFF`** | non observé lors des changements d'état (voir §12) |
 | **État allumée/éteinte, intensité, état LC** | **rien** | → doit être interrogé |
 
 ### Bon à savoir
 
 - Le mode **Auto** de l'appli Steinel = *mode LC activé* + **rappel de la scène 3** (« Nightmatic »).
   Une scène Bluetooth Mesh mémorise aussi les **propriétés LC** : la rappeler **remet la puissance du détecteur**
-  à la valeur enregistrée par l'appli Steinel (93 % ici). Voir §8.3.
+  à la valeur enregistrée par l'appli Steinel (93 % ici). Voir §10.3.
 - Les réglages du détecteur sont des **propriétés Light LC** standard, sur l'élément 1 :
   `0x002B` seuil de luminosité, `0x002E` intensité à l'allumage (« puissance »),
   `0x0030` intensité au repos (« lumière de base »), `0x003C` durée après le dernier mouvement (« temporisation »).
@@ -180,6 +184,8 @@ Tout ce qui suit a été lu dans la sauvegarde cloud Steinel (`/project/network/
 - Luminosité `0xFFFFFF` ignorée ; mode et seuil de la lampe principale publiés seulement s'ils changent.
 - Mouvement : `poll_motion()` (secours, un appel sur six) et interrogation de l'état allumée/éteinte de la lampe principale.
 - Interrogation plus rapide et entrelacée des lampes supplémentaires (une lampe puis l'autre, toutes les 1,5 s).
+- Interface web : pages *Tableau de bord* et *Avancé* embarquées (`steinel_dashboard.h`, `steinel_advanced.h`), route JSON `/steinel/lamps`, `set_primary_name()` / `set_lamp_name()`, mise à jour GitHub désactivée.
+- Écoute des messages propriétaires Steinel (modèle fabricant `0563:1FFF`, 64 codes, groupe `0xFEFF`).
 
 ### Modifications du YAML (`esphome/gl-s10-steinel.yaml`)
 
@@ -189,6 +195,7 @@ Tout ce qui suit a été lu dans la sauvegarde cloud Steinel (`/project/network/
 - Entités modèles pour chaque lampe, publiées **seulement quand elles changent** (principe `static last`, `update_interval: 1s`).
 - Filtre `delayed_off` sur le mouvement (10 s par défaut) : les lampes signalent un mouvement *instantané*.
 - Signal filtré (`delta: 3` dB).
+- `ota: - platform: web_server` pour charger le firmware depuis la page web.
 - Logique des LEDs (toutes les 250 ms) : LED réseau selon l'Ethernet, Home Assistant et les erreurs ; LED Bluetooth selon *Mesh Ready*.
 
 ---
@@ -215,61 +222,168 @@ Entités de la passerelle : *Mesh Ready*, *Status*, *Refresh*, *Safe Mode Boot*,
 
 ---
 
-## 6. Compilation et première installation
+## 6. Interface web de la passerelle
 
-### Prérequis
+Ouvrez `http://<ip-de-la-passerelle>` (identifiant `admin` + votre mot de passe admin). Les deux pages sont
+**bilingues français / anglais** (selon la langue du navigateur, bouton **FR | EN**, choix mémorisé) et partagent
+les mêmes onglets de navigation.
 
-- **ESPHome 2026.7.3** (exigé par le composant). Sous macOS :
-  ```bash
-  brew install python@3.13
-  python3.13 -m venv ~/esphome-steinel && source ~/esphome-steinel/bin/activate
-  pip install --upgrade pip wheel && pip install "esphome==2026.7.3"
-  ```
-  Sur un **Mac Intel**, `cbor2` peut nécessiter Rust : `brew install rust`, puis relancez `pip install`.
-- Votre compte Steinel Connect (e-mail / mot de passe) et les lampes déjà configurées dans l'appli Steinel.
+| Page | Adresse | Contenu |
+|---|---|---|
+| **Tableau de bord** | `/` | Résumé du réseau Mesh, une carte par lampe (mode, lumière, intensité, mouvement, luminosité, seuil, signal, firmware), **chargement du firmware** (`firmware.ota.bin`, barre de progression, attente du redémarrage). Rafraîchi toutes les 2 s. |
+| **Avancé** | `/steinel/avance` | Passerelle (état du Mesh, mode d'exécution, firmware, durée de fonctionnement, cause du dernier redémarrage, mémoire, état du mot de passe admin), compteurs Mesh, **tableau de toutes les lampes** (rôle, plage d'adresses, firmware, signal), réseau Steinel (import / suspension / reprise / suppression), mot de passe admin, relecture, réinitialisation usine. |
+| Page d'origine | `/steinel/classique` | La page NightmatIQ du projet d'origine, conservée en secours. |
+| JSON | `/steinel/lamps`, `/steinel/status` | État lisible par programme. |
 
-### Secrets
-
-Créez `esphome/secrets.yaml` (à ne jamais publier) :
-```yaml
-ota_password: "le mot de passe admin que vous définirez dans l'interface web"
-api_encryption_key: "…"   # optionnel, voir §11
-```
-> Le composant **aligne le mot de passe OTA sur le mot de passe admin de l'interface web** : après l'avoir
-> changé dans l'interface, les mises à jour OTA exigent ce même mot de passe dans `secrets.yaml`.
-
-### Compilation
-
-```bash
-cd esphome
-esphome compile gl-s10-steinel.yaml
-```
-
-### Premier flash (par câble série)
-
-```bash
-esptool --port /dev/cu.usbserial-XXXX --baud 115200 --before no-reset --after no-reset \
-        --chip esp32 write-flash -z 0x0 .esphome/build/gl-s10-steinel/build/firmware.factory.bin
-```
-(mode flash : bouton situé à côté des 9 trous, maintenu pendant la mise sous tension.)
-
-Branchez ensuite l'Ethernet : la passerelle obtient une adresse en DHCP. Les mises à jour suivantes passent par le réseau :
-```bash
-esphome run gl-s10-steinel.yaml --device <ip-de-la-passerelle>
-```
-
-### Configuration initiale (interface web)
-
-1. Ouvrez `http://<ip-de-la-passerelle>`, connectez-vous avec `admin` / `12345678` et **changez le mot de passe admin**.
-2. Saisissez votre compte Steinel, téléchargez la liste des réseaux, choisissez le vôtre.
-3. **Node** : saisissez l'adresse de votre lampe **principale** (par exemple `000F`). En automatique, le firmware
-   prend le premier nœud compatible.
-4. IV Index à `0` (automatique), puis **Install**.
-5. Ajoutez l'appareil dans Home Assistant (intégration ESPHome).
+- Le chargement du firmware utilise `ota: - platform: web_server` d'ESPHome (`/update`), protégé par l'identifiant admin.
+- La **mise à jour automatique depuis GitHub** du projet d'origine est **désactivée** : elle télécharge le firmware
+  ESP32-C3, incompatible avec le GL-S10.
 
 ---
 
-## 7. Configurer vos propres luminaires
+## 7. Compilation et installation depuis un ordinateur (macOS / Linux)
+
+### 7.1 Prérequis
+
+Le composant exige **ESPHome ≥ 2026.7.3** (testé avec la 2026.7.3).
+
+**macOS** (Homebrew) :
+```bash
+brew install python@3.13 git
+python3.13 -m venv ~/esphome-steinel
+source ~/esphome-steinel/bin/activate
+pip install --upgrade pip wheel
+pip install "esphome==2026.7.3"
+```
+Sur un **Mac Intel**, `cbor2` peut devoir être compilé : `brew install rust`, puis relancez `pip install`.
+
+**Linux** (Debian / Ubuntu / Raspberry Pi OS) :
+```bash
+sudo apt update && sudo apt install -y python3-venv python3-pip git
+python3 -m venv ~/esphome-steinel
+source ~/esphome-steinel/bin/activate
+pip install --upgrade pip wheel
+pip install "esphome==2026.7.3"
+sudo usermod -aG dialout "$USER"   # accès au port série (se déconnecter / reconnecter ensuite)
+```
+
+Récupérer le code :
+```bash
+git clone -b gl-s10-multilamp https://github.com/bouboun59/esphome-steinel-mesh-gl-s10.git
+cd esphome-steinel-mesh-gl-s10/esphome
+```
+
+### 7.2 Secrets
+
+Créez `esphome/secrets.yaml` (**à ne jamais publier**, il est ignoré par `.gitignore`) :
+```yaml
+ota_password: "le mot de passe admin de la page web de la passerelle"
+api_encryption_key: "…"   # optionnel, voir §13
+```
+> Le composant **aligne le mot de passe OTA sur le mot de passe admin de l'interface web** : après l'avoir changé
+> dans l'interface, les mises à jour OTA exigent ce même mot de passe dans `secrets.yaml`.
+
+### 7.3 Compilation
+
+```bash
+source ~/esphome-steinel/bin/activate
+esphome compile gl-s10-steinel.yaml
+```
+La première compilation télécharge ESP-IDF et prend 10 à 30 minutes.
+
+### 7.4 Premier flash (par câble série)
+
+Nom du port série : macOS `/dev/cu.usbserial-XXXX` ou `/dev/cu.wchusbserial-XXXX` (`ls /dev/cu.*`),
+Linux `/dev/ttyUSB0` (`ls /dev/ttyUSB*`). Mettez le GL-S10 en mode flash (bouton situé à côté des 9 trous,
+maintenu pendant la mise sous tension), puis :
+
+```bash
+esptool --port <PORT> --baud 115200 --before no-reset --after no-reset --chip esp32 \
+        write-flash -z 0x0 .esphome/build/gl-s10-steinel/build/firmware.factory.bin
+```
+Débranchez puis rebranchez l'alimentation **sans** le bouton. La passerelle obtient une adresse en DHCP
+(ou l'adresse fixe, §7.7).
+
+### 7.5 Mises à jour par le réseau
+
+```bash
+esphome run gl-s10-steinel.yaml --device <ip-de-la-passerelle>
+```
+ou chargez `.esphome/build/gl-s10-steinel/build/firmware.ota.bin` depuis la page **Tableau de bord**.
+
+### 7.6 Configuration initiale (interface web)
+
+1. Ouvrez `http://<ip-de-la-passerelle>`, connectez-vous avec `admin` / `12345678`, puis **Avancé → Sécurité** :
+   changez le mot de passe admin (et reportez-le dans `ota_password`).
+2. **Avancé → Réseau Steinel** : saisissez votre compte Steinel Connect, recherchez vos réseaux, choisissez le vôtre.
+3. **Adresse de la lampe principale** : par exemple `000F` (vide = premier nœud compatible). IV Index `0` → **Installer**.
+4. Ajoutez l'appareil dans Home Assistant (intégration ESPHome).
+
+### 7.7 Adresse IP fixe (optionnel)
+
+Ajoutez `manual_ip` au bloc `ethernet:`. Pour l'envoi qui change l'adresse, gardez `use_address: <adresse actuelle>`,
+puis supprimez-le :
+```yaml
+ethernet:
+  # … réglages existants (id, type, broches) …
+  manual_ip:
+    static_ip: 192.168.1.238
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.2
+    dns2: 192.168.1.1
+  use_address: 192.168.1.58   # seulement pour cet envoi
+```
+Alternative sans toucher au firmware : une réservation DHCP sur votre box pour l'adresse MAC de la passerelle.
+
+### 7.8 Astuces macOS / zsh
+
+- Coller des commandes contenant des `# commentaires` peut échouer sous zsh : `echo 'setopt interactivecomments' >> ~/.zshrc`.
+- Dans un *heredoc* (`<<'EOF'`), le `EOF` de fin doit être tout au début de la ligne.
+- Mots de passe avec caractères spéciaux : `read -rs 'PW?Mot de passe : '`, puis utilisez `"$PW"`.
+
+---
+
+## 8. ESPHome Device Builder (Home Assistant)
+
+Vous pouvez compiler et installer la passerelle **directement depuis Home Assistant** (testé : Device Builder 2026.9.0).
+Le composant est téléchargé depuis GitHub à chaque compilation : le seul fichier dans Home Assistant est le YAML.
+
+1. **Device Builder → Secrets** : ajoutez
+   ```yaml
+   ota_password: "<mot de passe admin de la passerelle>"
+   api_encryption_key: "<clé base64, par exemple celle générée par Device Builder>"
+   ```
+2. **+ New device** (sans l'assistant), nommé `gl-s10-steinel`, **Edit**, remplacez **tout** le contenu par
+   [`esphome/device-builder/gl-s10-steinel.yaml`](esphome/device-builder/gl-s10-steinel.yaml). Son bloc
+   `external_components` pointe vers ce dépôt :
+   ```yaml
+   external_components:
+     - source:
+         type: git
+         url: https://github.com/bouboun59/esphome-steinel-mesh-gl-s10
+         ref: gl-s10-multilamp
+         path: esphome/components
+       components: [nightmatiq_mesh]
+       refresh: 0s
+   ```
+3. Adaptez la lambda `on_boot` (vos lampes) et, si besoin, l'adresse IP fixe (§7.7).
+4. Si Device Builder demande la carte, choisissez **DOIT ESP32 DEVKIT V1** (`esp32doit-devkit-v1`).
+5. **Install → Wirelessly** (la première compilation sur la machine Home Assistant prend 10 à 30 minutes et demande
+   environ 2 Go de RAM).
+6. Avec le chiffrement de l'API, Home Assistant demande la clé une fois
+   (*Paramètres → Appareils et services → ESPHome → Reconfigurer*).
+
+> ⚠️ N'installez jamais sur le GL-S10 le modèle par défaut créé par l'assistant de Device Builder (`esp32dev`,
+> Wi-Fi seulement) : la passerelle perdrait l'Ethernet et le Mesh, et il faudrait la reflasher par câble série.
+
+**Méthode de travail** : modification du code sur un ordinateur → `git commit` / `git push` → **Install** dans
+Device Builder. Utilisez un seul outil pour flasher (Device Builder **ou** la ligne de commande) pour ne pas mélanger
+les versions. Quand le YAML du dépôt change, reportez la même modification dans le YAML de Device Builder.
+
+---
+
+## 9. Configurer vos propres luminaires
 
 Toutes les informations viennent de votre sauvegarde Steinel. Téléchargez-la (mêmes adresses que l'interface web) :
 
@@ -325,12 +439,12 @@ Installation testée, pour référence :
 
 ---
 
-## 8. Couche Home Assistant
+## 10. Couche Home Assistant
 
 Des fichiers d'exemple se trouvent dans [`home-assistant/gl-s10/`](home-assistant/gl-s10/). Les identifiants
 d'entités dépendent des noms donnés à l'appareil et aux entités : adaptez-les.
 
-### 8.1 Une lumière variable par luminaire (lumière modèle)
+### 10.1 Une lumière variable par luminaire (lumière modèle)
 
 La passerelle expose séparément le *Mode* et l'*Intensité*. Une **lumière modèle** (template light) les réunit en
 une vraie lumière HA, avec un curseur de luminosité ([`template-lights.yaml`](home-assistant/gl-s10/template-lights.yaml),
@@ -344,13 +458,13 @@ ou création via *Paramètres → Appareils et services → Entrées → Modèle
 L'intensité est envoyée **avant** le passage en *Always On* : un Generic OnOff Set restaure la dernière intensité,
 donc la lampe va directement au niveau demandé, sans flash intermédiaire.
 
-### 8.2 Onglet de tableau de bord
+### 10.2 Onglet de tableau de bord
 
 [`dashboard-view.yaml`](home-assistant/gl-s10/dashboard-view.yaml) : une vue *sections* avec, pour chaque
 luminaire, la tuile de lumière et son curseur, le mouvement, la luminosité et les boutons de mode.
 À ajouter via *Tableau de bord → modifier → + (nouvelle vue) → ⋮ → Modifier en YAML*.
 
-### 8.3 Conserver l'intensité choisie
+### 10.3 Conserver l'intensité choisie
 
 Comme le **mode Auto rappelle la scène 3**, la puissance du détecteur revient à la valeur Steinel à chaque retour
 en Auto. La solution :
@@ -364,7 +478,7 @@ Résultat : l'intensité que vous choisissez est utilisée pour l'allumage manue
 
 ---
 
-## 9. Retour d'expérience et dépannage
+## 11. Retour d'expérience et dépannage
 
 | Symptôme | Cause / solution |
 |---|---|
@@ -375,14 +489,14 @@ Résultat : l'intensité que vous choisissez est utilisée pour l'allumage manue
 | Luminosité affichée à 167 772 lx | `0xFFFFFF` = valeur inconnue → désormais ignorée. |
 | Le mouvement clignote | Les lampes signalent un mouvement instantané → `delayed_off` (10 s par défaut). |
 | `Authentication invalid` pendant l'OTA | Mot de passe OTA = mot de passe admin web → à mettre dans `secrets.yaml`. |
-| L'intensité revient à 93 % | Scène 3 rappelée par le mode Auto → §8.3. |
+| L'intensité revient à 93 % | Scène 3 rappelée par le mode Auto → §10.3. |
 | Allumage manuel très faible | Generic OnOff restaure la *dernière* intensité → la lumière modèle règle d'abord l'intensité. |
 | `No outbound bearer found, inbound bearer 0` | Sans gravité : paquets relayés que la passerelle ne retransmet pas. |
 | `request timed out` occasionnels sur les L 810 | Signal faible (-85 à -97 dBm) → rapprocher le GL-S10 ou le placer entre les lampes ; les lampes se relaient entre elles. |
 
 ---
 
-## 10. Limites connues et pistes
+## 12. Limites connues et pistes
 
 - **Les changements provoqués par le détecteur sont interrogés** (3 à 6 s) : les lampes n'annoncent pas leur état
   allumée/éteinte. Les changements faits depuis Home Assistant s'affichent instantanément.
@@ -397,7 +511,7 @@ Résultat : l'intensité que vous choisissez est utilisée pour l'allumage manue
 
 ---
 
-## 11. Sécurité
+## 13. Sécurité
 
 - **Ne publiez jamais** `secrets.yaml` ni `steinel-backup.json` (clés du réseau et des appareils).
 - La passerelle stocke les clés du réseau Steinel : placez-la sur un VLAN de confiance / IoT.
@@ -407,7 +521,7 @@ Résultat : l'intensité que vous choisissez est utilisée pour l'allumage manue
 
 ---
 
-## 12. Licence et remerciements
+## 14. Licence et remerciements
 
 - Licence : **GNU GPL v3.0**, héritée du projet d'origine (voir [`LICENSE`](LICENSE)).
   Conformément à la section 5 de la GPL-3.0, les fichiers modifiés dans ce fork sont indiqués dans ce README (§4)
