@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import (
+    esp32,
     binary_sensor,
     esp32_ble,
     number,
@@ -66,6 +67,9 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 async def to_code(config):
+    # ESPHome >= 2026.9 exclut ces composants ESP-IDF par defaut
+    esp32.include_builtin_idf_component("esp_http_client")
+    esp32.include_builtin_idf_component("json")
     if config[CONF_EXTENDED_DIAGNOSTICS]:
         cg.add_define("USE_NIGHTMATIQ_EXTENDED_DIAGNOSTICS")
 
