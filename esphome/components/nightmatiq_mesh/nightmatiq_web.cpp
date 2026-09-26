@@ -1,5 +1,8 @@
 #include "nightmatiq_mesh.h"
 #include "nightmatiq_page.h"
+#include "steinel_dashboard.h"
+#include "steinel_advanced.h"
+#include <cmath>
 
 #include <algorithm>
 #include <cctype>
@@ -1401,7 +1404,8 @@ bool NightmatiqMesh::canHandle(AsyncWebServerRequest *request) const {
   char url_buffer[AsyncWebServerRequest::URL_BUF_SIZE];
   const StringRef url = request->url_to(url_buffer);
   if (request->method() == HTTP_GET)
-    return url == "/" || url == "/steinel" || url == "/steinel/status";
+    return url == "/" || url == "/steinel" || url == "/steinel/status" || url == "/steinel/avance" ||
+           url == "/steinel/lamps" || url == "/steinel/classique";
   return request->method() == HTTP_POST &&
          (url == "/steinel/discover" || url == "/steinel/install" || url == "/steinel/enable" ||
           url == "/steinel/disable" || url == "/steinel/remove" ||
@@ -1415,7 +1419,10 @@ void NightmatiqMesh::handleRequest(AsyncWebServerRequest *request) {
   if (!this->authenticate_(request)) return;
   char url_buffer[AsyncWebServerRequest::URL_BUF_SIZE];
   const StringRef url = request->url_to(url_buffer);
-  if (url == "/" || url == "/steinel") return this->handle_index_(request);
+  if (url == "/" || url == "/steinel") return this->handle_dashboard_(request);
+  if (url == "/steinel/avance") return this->handle_advanced_(request);
+  if (url == "/steinel/classique") return this->handle_index_(request);
+  if (url == "/steinel/lamps") return this->handle_lamps_(request);
   if (url == "/steinel/status") return this->handle_status_(request);
   if (url == "/steinel/discover") return this->handle_discover_(request);
   if (url == "/steinel/install") return this->handle_install_(request);
@@ -1427,7 +1434,8 @@ void NightmatiqMesh::handleRequest(AsyncWebServerRequest *request) {
   if (url == "/steinel/refresh") return this->handle_refresh_(request);
   if (url == "/steinel/password") return this->handle_password_(request);
   if (url == "/steinel/wifi") return this->handle_wifi_(request);
-  if (url == "/steinel/update") return this->handle_auto_update_(request);
+  if (url == "/steinel/update")  // firmware officiel ESP32-C3 : incompatible avec le GL-S10
+    return send_json_(request, 409, "{\"message\":\"Mise a jour automatique desactivee sur GL-S10 : chargez un fichier firmware.ota.bin.\"}");
   if (url == "/steinel/factory-reset") return this->handle_factory_reset_(request);
   send_json_(request, 404, "{\"message\":\"Not found\"}");
 }
@@ -1438,6 +1446,127 @@ void NightmatiqMesh::handle_index_(AsyncWebServerRequest *request) {
   response->addHeader("Content-Encoding", "gzip");
   response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   request->send(response);
+}
+
+void NightmatiqMesh::handle_dashboard_(AsyncWebServerRequest *request) {
+  auto *response = request->beginResponse(200, "text/html; charset=utf-8", STEINEL_DASHBOARD_GZ,
+                                          sizeof(STEINEL_DASHBOARD_GZ));
+  response->addHeader("Content-Encoding", "gzip");
+  response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  request->send(response);
+}
+
+void NightmatiqMesh::handle_advanced_(AsyncWebServerRequest *request) {
+  auto *response = request->beginResponse(200, "text/html; charset=utf-8", STEINEL_ADVANCED_GZ,
+                                          sizeof(STEINEL_ADVANCED_GZ));
+  response->addHeader("Content-Encoding", "gzip");
+  response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  request->send(response);
+}
+
+void NightmatiqMesh::handle_lamps_(AsyncWebServerRequest *request) {
+  httpd_req_t *raw_request = static_cast<httpd_req_t *>(*request);
+  httpd_resp_set_status(raw_request, HTTPD_200);
+  httpd_resp_set_type(raw_request, "application/json; charset=utf-8");
+  httpd_resp_set_hdr(raw_request, "Cache-Control", "no-store, no-cache, must-revalidate");
+  StatusJsonWriter body(raw_request);
+  char buf[96];
+  auto fnum = [&](const char *key, float value, int decimals) {
+    body.append(",\"");
+    body.append(key);
+    body.append("\":");
+    if (std::isnan(value)) {
+      body.append("null");
+      return;
+    }
+    std::snprintf(buf, sizeof(buf), "%.*f", decimals, value);
+    body.append(buf);
+  };
+  auto fbool = [&](const char *key, int value) {
+    body.append(",\"");
+    body.append(key);
+    body.append("\":");
+    body.append(value < 0 ? "null" : (value ? "true" : "false"));
+  };
+  auto fstr = [&](const char *key, const char *value) {
+    body.append(",\"");
+    body.append(key);
+    body.append("\":\"");
+    body.escaped(value);
+    body.append("\"");
+  };
+  static const char *const MODE_NAMES[3] = {"Auto", "Always On", "Always Off"};
+  {
+    std::lock_guard<std::mutex> lock(this->state_mutex_);
+    body.append("{\"version\":\"");
+    body.append(ESPHOME_PROJECT_VERSION);
+    body.append("\"");
+    fstr("network", this->config_.network_name);
+    std::snprintf(buf, sizeof(buf), ",\"local\":\"%04X\",\"iv_index\":%" PRIu32, this->config_.local_address,
+                  this->config_.iv_index);
+    body.append(buf);
+  }
+  body.append(",\"mesh_ready\":");
+  body.append(this->mesh_ready_.load() ? "true" : "false");
+  body.number(",\"uptime\":", millis() / 1000U);
+  body.number(",\"heap\":", static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)));
+  body.append(",\"lamps\":[");
+  {
+    const uint16_t base = this->config_.onoff_address;
+    int mode = -1;
+    if (this->mode_override_pending_.load())
+      mode = this->requested_mode_.load();
+    else if (this->observed_lc_mode_.load() == 1)
+      mode = 0;
+    else if (this->observed_lc_mode_.load() == 0 && this->observed_onoff_.load() >= 0)
+      mode = this->observed_onoff_.load() > 0 ? 1 : 2;
+    body.append("{\"primary\":true");
+    fstr("name", this->primary_name_.empty() ? this->config_.node_name : this->primary_name_.c_str());
+    std::snprintf(buf, sizeof(buf), ",\"addr\":\"%04X\"", base);
+    body.append(buf);
+    fstr("mode", (mode >= 0 && mode <= 2) ? MODE_NAMES[mode] : "");
+    fbool("light", this->observed_onoff_.load());
+    fnum("intensity", this->lamp_lightness(base), 0);
+    const int motion = this->motion_raw_.load();
+    fbool("motion", (motion < 0 || motion == 0xFF) ? -1 : (motion > 0 ? 1 : 0));
+    fnum("lux", this->lux_received_.load() ? this->pending_lux_centilux_.load() / 100.0f : NAN, 1);
+    fnum("threshold", this->threshold_received_.load() ? this->pending_threshold_centilux_.load() / 100.0f : NAN, 0);
+    fnum("rssi", this->mesh_rssi_received_.load() ? static_cast<float>(this->last_mesh_rssi_dbm_.load()) : NAN, 0);
+    uint8_t fw_major = 0, fw_minor = 0, fw_patch = 0;
+    if (this->resolve_firmware_version_(fw_major, fw_minor, fw_patch)) {
+      std::snprintf(buf, sizeof(buf), "%u.%u.%u", fw_major, fw_minor, fw_patch);
+      fstr("fw", buf);
+    } else {
+      fstr("fw", "");
+    }
+    body.append("}");
+  }
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    const ExtraLamp &lamp = this->extra_[i];
+    const int lc = lamp.lc_mode.load();
+    const int out = lamp.onoff.load();
+    const int mode = lc == 1 ? 0 : (lc == 0 && out == 1) ? 1 : (lc == 0 && out == 0) ? 2 : -1;
+    body.append(",{\"primary\":false");
+    char fallback[16];
+    std::snprintf(fallback, sizeof(fallback), "Lampe %04X", lamp.base);
+    fstr("name", lamp.name.empty() ? fallback : lamp.name.c_str());
+    std::snprintf(buf, sizeof(buf), ",\"addr\":\"%04X\"", lamp.base);
+    body.append(buf);
+    fstr("mode", mode >= 0 ? MODE_NAMES[mode] : "");
+    fbool("light", out);
+    fnum("intensity", this->lamp_lightness(lamp.base), 0);
+    const int motion = lamp.motion_raw.load();
+    fbool("motion", (motion < 0 || motion == 0xFF) ? -1 : (motion > 0 ? 1 : 0));
+    fnum("lux", this->lamp_lux(lamp.base), 1);
+    fnum("threshold", this->lamp_threshold(lamp.base), 0);
+    fnum("rssi", this->lamp_rssi(lamp.base), 0);
+    const std::string fw = this->lamp_firmware(lamp.base);
+    fstr("fw", fw.c_str());
+    body.append("}");
+  }
+  body.append("]}");
+  if (!body.finish())
+    ESP_LOGW(WEB_TAG, "Could not send lamps response");
 }
 
 void NightmatiqMesh::handle_status_(AsyncWebServerRequest *request) {

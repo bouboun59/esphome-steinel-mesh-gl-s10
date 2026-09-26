@@ -77,6 +77,31 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   void set_mode(const std::string &mode);
   void request_refresh();
   void poll_motion();
+  // Lampes supplementaires (meme reseau Mesh, pilotage independant)
+  void add_lamp(uint16_t base, uint16_t scene = 0, uint8_t elements = 4);
+  void add_group(uint16_t group);
+  void add_state_group(uint16_t group);
+  void set_lamp_mode(uint16_t base, const std::string &mode);
+  int lamp_motion(uint16_t base) const;
+  float lamp_lux(uint16_t base) const;
+  int lamp_output(uint16_t base) const;
+  int lamp_lc_mode(uint16_t base) const;
+  void set_primary_tag(uint16_t tag) { this->primary_tag_ = tag; }
+  void set_lamp_tag(uint16_t base, uint16_t tag);
+  void set_lamp_name(uint16_t base, const std::string &name);
+  void set_primary_name(const std::string &name) { this->primary_name_ = name; }
+  void set_lamp_threshold(uint16_t base, float lux);
+  float lamp_threshold(uint16_t base) const;
+  std::string lamp_firmware(uint16_t base) const;
+  float lamp_hardware(uint16_t base) const;
+  float lamp_rssi(uint16_t base) const;
+  // Reglages LC des lampes : puissance (0x002E), lumiere de base (0x0030), temporisation (0x003C)
+  void add_lc_props(uint16_t base);
+  float lamp_lc_prop(uint16_t base, uint16_t property) const;
+  void set_lamp_lc_prop(uint16_t base, uint16_t property, float value);
+  // Intensite en direct (Light Lightness, element 0)
+  void set_lamp_lightness(uint16_t base, float percent);
+  float lamp_lightness(uint16_t base) const;
   int motion_raw() const { return this->motion_raw_.load(); }
   bool mesh_mode_enabled() const { return this->mesh_mode_enabled_; }
 
@@ -89,6 +114,7 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
                               esp_ble_mesh_sensor_client_cb_param_t *param);
   static void light_callback(esp_ble_mesh_light_client_cb_event_t event,
                              esp_ble_mesh_light_client_cb_param_t *param);
+  static void vendor_callback(esp_ble_mesh_model_cb_event_t event, esp_ble_mesh_model_cb_param_t *param);
   static void scene_callback(esp_ble_mesh_time_scene_client_cb_event_t event,
                              esp_ble_mesh_time_scene_client_cb_param_t *param);
  protected:
@@ -331,6 +357,9 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   bool authenticate_(AsyncWebServerRequest *request) const;
   void handle_index_(AsyncWebServerRequest *request);
   void handle_status_(AsyncWebServerRequest *request);
+  void handle_dashboard_(AsyncWebServerRequest *request);
+  void handle_advanced_(AsyncWebServerRequest *request);
+  void handle_lamps_(AsyncWebServerRequest *request);
   void handle_discover_(AsyncWebServerRequest *request);
   void handle_install_(AsyncWebServerRequest *request);
   void handle_enable_(AsyncWebServerRequest *request);
@@ -355,6 +384,83 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   bool record_send_result_(esp_err_t result);
   bool begin_access_operation_(AccessOperation operation, uint32_t opcode);
   bool send_motion_get_();
+  void bind_vendor_model_();
+  struct ExtraLamp {
+    uint16_t base{0};
+    uint8_t elements{4};
+    uint16_t scene{0};
+    std::atomic<int> motion_raw{-1};
+    std::atomic<int32_t> lux_centilux{-1};
+    std::atomic<int> lc_mode{-1};
+    std::atomic<int> onoff{-1};
+    int8_t requested{-1};
+    int8_t active_mode{-1};
+    uint8_t step{0};
+    uint8_t tid{0};
+    uint32_t at{0};
+    uint16_t tag{0};
+    std::string name;
+    uint8_t discover{2};
+    std::atomic<int32_t> threshold_centilux{-1};
+    int32_t threshold_request{-1};
+    uint8_t threshold_repeats{0};
+    std::array<uint8_t, 3> threshold_storage{};
+    net_buf_simple threshold_buffer{};
+    std::atomic<int> rssi{0};
+    std::atomic<bool> rssi_valid{false};
+    std::atomic<bool> identity_valid{false};
+    std::atomic<uint8_t> fw_major{0};
+    std::atomic<uint8_t> fw_minor{0};
+    std::atomic<uint8_t> fw_patch{0};
+    std::atomic<uint8_t> hw{0};
+  };
+  static constexpr size_t MAX_EXTRA_LAMPS = 4;
+  static constexpr size_t MAX_GROUPS = 4;
+  ExtraLamp *find_extra_(uint16_t address);
+  const ExtraLamp *find_extra_base_(uint16_t base) const;
+  bool restore_extra_nodes_();
+  void advance_extra_modes_(uint32_t now);
+  bool advance_extra_poll_(uint32_t now);
+  bool handle_extra_sensor_(esp_ble_mesh_sensor_client_cb_param_t *param);
+  bool send_lc_mode_set_to_(uint16_t destination, bool enabled);
+  bool send_onoff_set_to_(uint16_t destination, bool on, uint8_t tid);
+  bool send_scene_recall_to_(uint16_t destination, uint16_t scene, uint8_t tid);
+  bool send_extra_get_(const ExtraLamp &lamp, uint8_t kind);
+  bool send_lc_threshold_set_to_(ExtraLamp &lamp, uint32_t centilux);
+  bool all_extra_identities_found_() const;
+  uint16_t primary_tag_{0};
+  std::string primary_name_;
+  uint32_t last_published_threshold_{0xFFFFFFFF};
+  int8_t last_published_mode_{-1};
+  struct LcProps {
+    uint16_t base{0};
+    std::atomic<int32_t> lightness_on{-1};
+    std::atomic<int32_t> lightness_standby{-1};
+    std::atomic<int32_t> time_run_on{-1};
+    uint16_t pending_property{0};
+    int32_t pending_raw{-1};
+    uint8_t repeats{0};
+    uint32_t at{0};
+    std::array<uint8_t, 3> storage{};
+    net_buf_simple buffer{};
+    std::atomic<int32_t> lightness{-1};
+    int32_t lightness_request{-1};
+    uint8_t lightness_repeats{0};
+    uint8_t lightness_tid{0};
+    uint32_t lightness_at{0};
+  };
+  std::array<LcProps, 4> lc_props_{};
+  uint8_t props_poll_tick_{0};
+  size_t lightness_poll_index_{0};
+  size_t lc_props_count_{0};
+  size_t lc_props_poll_index_{0};
+  uint32_t lc_props_poll_at_{0};
+  LcProps *find_lc_props_(uint16_t address);
+  const LcProps *find_lc_props_(uint16_t address) const;
+  static std::atomic<int32_t> *lc_prop_slot_(LcProps &props, uint16_t property);
+  bool handle_lc_prop_status_(uint16_t source, const esp_ble_mesh_light_lc_property_status_cb_t &status);
+  bool advance_props_poll_(uint32_t now);
+  void advance_props_write_(uint32_t now);
   bool record_access_send_result_(AccessOperation operation, uint32_t opcode, esp_err_t result);
   bool complete_access_operation_(uint32_t opcode, bool success);
   void expire_access_operation_(uint32_t now);
@@ -486,6 +592,16 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
 
   std::atomic<bool> mesh_ready_{false};
   std::atomic<int> motion_raw_{-1};
+  std::array<ExtraLamp, MAX_EXTRA_LAMPS> extra_{};
+  size_t extra_count_{0};
+  size_t extra_poll_index_{0};
+  uint8_t extra_poll_kind_{0};
+  uint32_t extra_poll_at_{0};
+  std::array<uint16_t, MAX_GROUPS> groups_{};
+  size_t group_count_{0};
+  std::array<uint16_t, MAX_GROUPS> state_groups_{};
+  size_t state_group_count_{0};
+  uint8_t fast_poll_count_{0};
   uint32_t mesh_ready_at_{0};
   bool address_recovery_attempted_this_boot_{false};
   std::atomic<uint32_t> live_iv_index_{0};

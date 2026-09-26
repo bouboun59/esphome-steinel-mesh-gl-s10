@@ -82,6 +82,81 @@ static esp_ble_mesh_client_t onoff_client{};
 static esp_ble_mesh_client_t sensor_client{};
 static esp_ble_mesh_client_t scene_client{};
 static esp_ble_mesh_client_t light_lc_client{};
+static esp_ble_mesh_client_t lightness_client{};
+
+// ===== Ecoute des messages proprietaires Steinel (diffusion vers le groupe 0xFEFF) =====
+static constexpr uint16_t STEINEL_CID = 0x0563;
+static constexpr uint16_t STEINEL_SNIFF_MODEL_ID = 0x1FFF;
+static esp_ble_mesh_model_op_t steinel_vnd_ops[] = {
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x00, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x01, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x02, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x03, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x04, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x05, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x06, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x07, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x08, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x09, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0A, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0B, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0C, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0D, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0E, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x0F, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x10, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x11, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x12, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x13, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x14, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x15, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x16, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x17, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x18, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x19, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1A, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1B, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1C, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1D, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1E, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x1F, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x20, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x21, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x22, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x23, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x24, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x25, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x26, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x27, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x28, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x29, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2A, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2B, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2C, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2D, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2E, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x2F, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x30, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x31, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x32, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x33, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x34, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x35, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x36, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x37, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x38, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x39, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3A, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3B, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3C, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3D, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3E, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP(ESP_BLE_MESH_MODEL_OP_3(0x3F, 0x0563), 0),
+    ESP_BLE_MESH_MODEL_OP_END,
+};
+static esp_ble_mesh_model_t steinel_vnd_models[] = {
+    ESP_BLE_MESH_VENDOR_MODEL(STEINEL_CID, STEINEL_SNIFF_MODEL_ID, steinel_vnd_ops, nullptr, nullptr),
+};
 
 static esp_ble_mesh_model_t root_models[] = {
     ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
@@ -90,10 +165,11 @@ static esp_ble_mesh_model_t root_models[] = {
     ESP_BLE_MESH_MODEL_SENSOR_CLI(nullptr, &sensor_client),
     ESP_BLE_MESH_MODEL_SCENE_CLI(nullptr, &scene_client),
     ESP_BLE_MESH_MODEL_LIGHT_LC_CLI(nullptr, &light_lc_client),
+    ESP_BLE_MESH_MODEL_LIGHT_LIGHTNESS_CLI(nullptr, &lightness_client),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
-    ESP_BLE_MESH_ELEMENT(0, root_models, ESP_BLE_MESH_MODEL_NONE),
+    ESP_BLE_MESH_ELEMENT(0, root_models, steinel_vnd_models),
 };
 
 static esp_ble_mesh_comp_t composition{};
@@ -105,8 +181,7 @@ bool NightmatiqMesh::load_advertised_identity_() {
   StoredAdvertisedIdentity stored{};
   if (!this->advertised_identity_preference_.load(&stored) ||
       stored.magic != ADVERTISED_IDENTITY_MAGIC ||
-      stored.version != ADVERTISED_IDENTITY_VERSION ||
-      stored.product_id != NIGHTMATIQ_PRODUCT_ID)
+      stored.version != ADVERTISED_IDENTITY_VERSION)
     return false;
 
   this->advertised_product_id_.store(stored.product_id);
@@ -261,7 +336,23 @@ bool NightmatiqMesh::capture_advertised_identity_(const uint8_t *data, size_t le
     return false;
   const uint16_t product_id = static_cast<uint16_t>(data[0]) |
                               (static_cast<uint16_t>(data[1]) << 8);
-  if (product_id != NIGHTMATIQ_PRODUCT_ID)
+  const uint16_t adv_tag = length >= 9 ? static_cast<uint16_t>(static_cast<uint16_t>(data[7]) |
+                                                               (static_cast<uint16_t>(data[8]) << 8))
+                                        : 0;
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    ExtraLamp &lamp = this->extra_[i];
+    if (adv_tag != 0 && lamp.tag == adv_tag && !lamp.identity_valid.load()) {
+      lamp.fw_major.store(data[2]);
+      lamp.fw_minor.store(data[3]);
+      lamp.fw_patch.store(data[4]);
+      lamp.hw.store(data[6]);
+      lamp.identity_valid.store(true);
+      ESP_LOGI(TAG, "Lampe 0x%04X : firmware %u.%u.%u, materiel %u", lamp.base, data[2], data[3],
+               data[4], data[6]);
+    }
+  }
+  if (product_id != NIGHTMATIQ_PRODUCT_ID &&
+      !(this->primary_tag_ != 0 && adv_tag == this->primary_tag_))
     return false;
 
   this->advertised_product_id_.store(product_id);
@@ -386,7 +477,8 @@ void NightmatiqMesh::advance_identity_scan_() {
       ESP_LOGI(TAG, "Active NightmatIQ identity scan started with a random scanner address");
       return;
     case IdentityScanPhase::RUNNING:
-      if (!this->identity_found_this_boot_.load() && !this->identity_scan_stop_ready_.load())
+      if ((!this->identity_found_this_boot_.load() || !this->all_extra_identities_found_()) &&
+          !this->identity_scan_stop_ready_.load())
         return;
       if (!this->identity_scan_stop_ready_.load()) {
         const esp_err_t error = esp_ble_gap_stop_scanning();
@@ -538,6 +630,7 @@ bool NightmatiqMesh::initialize_mesh_() {
   esp_ble_mesh_register_sensor_client_callback(NightmatiqMesh::sensor_callback);
   esp_ble_mesh_register_light_client_callback(NightmatiqMesh::light_callback);
   esp_ble_mesh_register_time_scene_client_callback(NightmatiqMesh::scene_callback);
+  esp_ble_mesh_register_custom_model_callback(NightmatiqMesh::vendor_callback);
 
   this->set_status_("Initializing ESP-BLE-MESH core");
   esp_err_t error = esp_ble_mesh_init(provision, &composition);
@@ -978,6 +1071,28 @@ void NightmatiqMesh::bind_model_(uint16_t model_id) {
     ESP_LOGE(TAG, "Local AppKey bind request for model 0x%04X failed: %s", model_id, esp_err_to_name(error));
 }
 
+void NightmatiqMesh::bind_vendor_model_() {
+  const esp_err_t error = esp_ble_mesh_provisioner_bind_app_key_to_local_model(
+      esp_ble_mesh_get_primary_element_address(), this->config_.app_key_index, STEINEL_SNIFF_MODEL_ID,
+      STEINEL_CID);
+  if (error != ESP_OK) {
+    ESP_LOGE(TAG, "Ecoute Steinel : demande de liaison refusee (%s)", esp_err_to_name(error));
+    this->keys_bound_();  // on demarre quand meme, sans l'ecoute
+  }
+}
+
+void NightmatiqMesh::vendor_callback(esp_ble_mesh_model_cb_event_t event, esp_ble_mesh_model_cb_param_t *param) {
+  if (event != ESP_BLE_MESH_MODEL_OPERATION_EVT || param == nullptr || param->model_operation.ctx == nullptr)
+    return;
+  const auto &op = param->model_operation;
+  char hex[3 * 48 + 1] = {0};
+  const size_t shown = (op.msg == nullptr) ? 0 : (op.length < 48 ? op.length : 48);
+  for (size_t i = 0; i < shown; i++)
+    std::snprintf(hex + 3 * i, 4, "%02X ", op.msg[i]);
+  ESP_LOGI(TAG, "STEINEL_VND src=0x%04X dst=0x%04X op=0x%06" PRIX32 " len=%u rssi=%d data=%s", op.ctx->addr,
+           op.ctx->recv_dst, op.opcode, (unsigned) op.length, (int) op.ctx->recv_rssi, hex);
+}
+
 void NightmatiqMesh::mark_ready_() {
   this->mesh_ready_.store(true);
   this->mesh_ready_at_ = millis();
@@ -986,10 +1101,23 @@ void NightmatiqMesh::mark_ready_() {
   this->set_status_("Mesh client ready; polling NightmatIQ");
   ESP_LOGI(TAG, "NightmatIQ mesh keys imported and all client models bound");
   {
-    const esp_err_t sub_err = esp_ble_mesh_model_subscribe_group_addr(
-        esp_ble_mesh_get_primary_element_address(), ESP_BLE_MESH_CID_NVAL,
-        ESP_BLE_MESH_MODEL_ID_SENSOR_CLI, 0xC001);
-    ESP_LOGI(TAG, "Abonnement groupe 0xC001 (mouvement) : %d", (int) sub_err);
+    const size_t count = this->group_count_ == 0 ? 1 : this->group_count_;
+    for (size_t g = 0; g < count; g++) {
+      const uint16_t group = this->group_count_ == 0 ? 0xC001 : this->groups_[g];
+      const esp_err_t sub_err = esp_ble_mesh_model_subscribe_group_addr(
+          esp_ble_mesh_get_primary_element_address(), ESP_BLE_MESH_CID_NVAL,
+          ESP_BLE_MESH_MODEL_ID_SENSOR_CLI, group);
+      ESP_LOGI(TAG, "Abonnement groupe 0x%04X : %d", group, (int) sub_err);
+    }
+    for (size_t g = 0; g < this->state_group_count_; g++) {
+      const esp_err_t sub_err = esp_ble_mesh_model_subscribe_group_addr(
+          esp_ble_mesh_get_primary_element_address(), ESP_BLE_MESH_CID_NVAL,
+          ESP_BLE_MESH_MODEL_ID_GEN_ONOFF_CLI, this->state_groups_[g]);
+      ESP_LOGI(TAG, "Abonnement etat lumiere 0x%04X : %d", this->state_groups_[g], (int) sub_err);
+    }
+    const esp_err_t vnd_err = esp_ble_mesh_model_subscribe_group_addr(
+        esp_ble_mesh_get_primary_element_address(), STEINEL_CID, STEINEL_SNIFF_MODEL_ID, 0xFEFF);
+    ESP_LOGI(TAG, "Ecoute Steinel : abonnement 0xFEFF : %d", (int) vnd_err);
   }
   if (this->device_key_valid_) {
     this->composition_query_attempts_.store(0);
@@ -1114,6 +1242,7 @@ void NightmatiqMesh::provisioning_callback(esp_ble_mesh_prov_cb_event_t event,
       // private provisioner table from ESPHome's main loop.
       if (!self->restore_target_node_())
         return;
+      self->restore_extra_nodes_();
       const uint8_t *existing_app_key =
           esp_ble_mesh_provisioner_get_local_app_key(self->config_.net_key_index, self->config_.app_key_index);
       const esp_err_t result = existing_app_key == nullptr
@@ -1143,6 +1272,12 @@ void NightmatiqMesh::provisioning_callback(esp_ble_mesh_prov_cb_event_t event,
       break;
     case ESP_BLE_MESH_PROVISIONER_BIND_APP_KEY_TO_MODEL_COMP_EVT: {
       const auto &binding = param->provisioner_bind_app_key_to_model_comp;
+      if (binding.company_id == STEINEL_CID && binding.model_id == STEINEL_SNIFF_MODEL_ID) {
+        if (binding.err_code != 0)
+          ESP_LOGE(TAG, "Ecoute Steinel : liaison AppKey impossible (%d)", binding.err_code);
+        self->keys_bound_();
+        break;
+      }
       if (binding.err_code != 0) {
         ESP_LOGE(TAG, "AppKey bind failed for model 0x%04X: %d", binding.model_id, binding.err_code);
         return;
@@ -1154,7 +1289,9 @@ void NightmatiqMesh::provisioning_callback(esp_ble_mesh_prov_cb_event_t event,
       else if (binding.model_id == ESP_BLE_MESH_MODEL_ID_SCENE_CLI)
         self->bind_model_(ESP_BLE_MESH_MODEL_ID_LIGHT_LC_CLI);
       else if (binding.model_id == ESP_BLE_MESH_MODEL_ID_LIGHT_LC_CLI)
-        self->keys_bound_();
+        self->bind_model_(ESP_BLE_MESH_MODEL_ID_LIGHT_LIGHTNESS_CLI);
+      else if (binding.model_id == ESP_BLE_MESH_MODEL_ID_LIGHT_LIGHTNESS_CLI)
+        self->bind_vendor_model_();
       break;
     }
     default:
@@ -1296,7 +1433,13 @@ void NightmatiqMesh::poll_motion() {
       this->access_operation_.load() != AccessOperation::NONE ||
       this->control_kind_ != ControlKind::NONE || this->control_request_pending_())
     return;
-  this->send_motion_get_();
+  // Etat de la lumiere a chaque appel, mouvement (secours) 1 fois sur 6
+  if (++this->fast_poll_count_ >= 6) {
+    this->fast_poll_count_ = 0;
+    this->send_motion_get_();
+  } else {
+    this->send_onoff_get_();
+  }
 }
 
 bool NightmatiqMesh::send_motion_get_() {
@@ -1313,6 +1456,635 @@ bool NightmatiqMesh::send_motion_get_() {
   return this->record_access_send_result_(
       AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
       esp_ble_mesh_sensor_client_get_state(&common, &get));
+}
+
+// ===================== Lampes supplementaires =====================
+static constexpr uint32_t EXTRA_POLL_INTERVAL_MS = 1500;
+
+void NightmatiqMesh::add_lamp(uint16_t base, uint16_t scene, uint8_t elements) {
+  if (base == 0 || this->extra_count_ >= MAX_EXTRA_LAMPS)
+    return;
+  for (size_t i = 0; i < this->extra_count_; i++)
+    if (this->extra_[i].base == base)
+      return;
+  ExtraLamp &lamp = this->extra_[this->extra_count_++];
+  lamp.base = base;
+  lamp.scene = scene;
+  lamp.elements = elements == 0 ? 4 : elements;
+  ESP_LOGI(TAG, "Lampe supplementaire 0x%04X (scene %u, %u elements)", base, scene, lamp.elements);
+}
+
+void NightmatiqMesh::add_group(uint16_t group) {
+  if (group < 0xC000 || this->group_count_ >= MAX_GROUPS)
+    return;
+  for (size_t i = 0; i < this->group_count_; i++)
+    if (this->groups_[i] == group)
+      return;
+  this->groups_[this->group_count_++] = group;
+}
+
+void NightmatiqMesh::add_state_group(uint16_t group) {
+  if (group < 0xC000 || this->state_group_count_ >= MAX_GROUPS)
+    return;
+  for (size_t i = 0; i < this->state_group_count_; i++)
+    if (this->state_groups_[i] == group)
+      return;
+  this->state_groups_[this->state_group_count_++] = group;
+}
+
+NightmatiqMesh::ExtraLamp *NightmatiqMesh::find_extra_(uint16_t address) {
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    ExtraLamp &lamp = this->extra_[i];
+    if (address >= lamp.base && address < static_cast<uint32_t>(lamp.base) + lamp.elements)
+      return &lamp;
+  }
+  return nullptr;
+}
+
+const NightmatiqMesh::ExtraLamp *NightmatiqMesh::find_extra_base_(uint16_t base) const {
+  for (size_t i = 0; i < this->extra_count_; i++)
+    if (this->extra_[i].base == base)
+      return &this->extra_[i];
+  return nullptr;
+}
+
+bool NightmatiqMesh::restore_extra_nodes_() {
+  bool ok = true;
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    const ExtraLamp &lamp = this->extra_[i];
+    if (lamp.base == this->config_.onoff_address ||
+        esp_ble_mesh_provisioner_get_node_with_addr(lamp.base) != nullptr)
+      continue;
+    esp_ble_mesh_node_t node{};
+    node.unicast_addr = lamp.base;
+    node.element_num = lamp.elements;
+    node.net_idx = this->config_.net_key_index;
+    node.flags = 0;
+    node.iv_index = this->config_.iv_index;
+    std::memcpy(node.dev_uuid, this->config_.mesh_uuid.data(), sizeof(node.dev_uuid));
+    node.dev_uuid[14] ^= static_cast<uint8_t>(lamp.base >> 8);
+    node.dev_uuid[15] ^= static_cast<uint8_t>(lamp.base & 0xFF);
+    std::snprintf(node.name, sizeof(node.name), "lamp-%04X", lamp.base);
+    const int error = bt_mesh_provisioner_restore_node_info(reinterpret_cast<bt_mesh_node *>(&node));
+    if (error != 0) {
+      ESP_LOGE(TAG, "Lampe 0x%04X : restauration impossible (%d)", lamp.base, error);
+      ok = false;
+    } else {
+      ESP_LOGI(TAG, "Lampe 0x%04X : plage 0x%04X-0x%04X", lamp.base, lamp.base,
+               lamp.base + lamp.elements - 1);
+    }
+  }
+  return ok;
+}
+
+bool NightmatiqMesh::send_lc_mode_set_to_(uint16_t destination, bool enabled) {
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_light_client_set_state_t set{};
+  if (!this->set_common_(common, light_lc_client.model,
+                         ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_SET_UNACK, destination))
+    return false;
+  set.lc_mode_set.mode = enabled ? 1 : 0;
+  return this->record_send_result_(esp_ble_mesh_light_client_set_state(&common, &set));
+}
+
+bool NightmatiqMesh::send_onoff_set_to_(uint16_t destination, bool on, uint8_t tid) {
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_generic_client_set_state_t set{};
+  if (!this->set_common_(common, onoff_client.model,
+                         ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET_UNACK, destination))
+    return false;
+  set.onoff_set.op_en = false;
+  set.onoff_set.onoff = on ? 1 : 0;
+  set.onoff_set.tid = tid;
+  return this->record_send_result_(esp_ble_mesh_generic_client_set_state(&common, &set));
+}
+
+bool NightmatiqMesh::send_scene_recall_to_(uint16_t destination, uint16_t scene, uint8_t tid) {
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_time_scene_client_set_state_t set{};
+  if (!this->set_common_(common, scene_client.model,
+                         ESP_BLE_MESH_MODEL_OP_SCENE_RECALL_UNACK, destination))
+    return false;
+  set.scene_recall.op_en = false;
+  set.scene_recall.scene_number = scene;
+  set.scene_recall.tid = tid;
+  return this->record_send_result_(esp_ble_mesh_time_scene_client_set_state(&common, &set));
+}
+
+void NightmatiqMesh::set_lamp_mode(uint16_t base, const std::string &mode) {
+  ExtraLamp *lamp = this->find_extra_(base);
+  if (lamp == nullptr || lamp->base != base) {
+    ESP_LOGW(TAG, "Lampe 0x%04X inconnue", base);
+    return;
+  }
+  int8_t requested = -1;
+  if (mode == "Auto")
+    requested = 0;
+  else if (mode == "Always On")
+    requested = 1;
+  else if (mode == "Always Off")
+    requested = 2;
+  if (requested < 0)
+    return;
+  lamp->requested = requested;
+  // Affichage immediat ; les interrogations suivantes confirment l'etat reel.
+  if (requested == 0) {  // REACT_V1 : Auto = eteinte jusqu'a confirmation
+    lamp->lc_mode.store(1);
+    lamp->onoff.store(0);
+  } else {
+    lamp->lc_mode.store(0);
+    lamp->onoff.store(requested == 1 ? 1 : 0);
+  }
+}
+
+void NightmatiqMesh::advance_extra_modes_(uint32_t now) {
+  if (!this->mesh_ready_.load())
+    return;
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    ExtraLamp &lamp = this->extra_[i];
+    if (lamp.step == 0 && lamp.requested < 0 && lamp.threshold_request >= 0) {
+      if (static_cast<int32_t>(now - lamp.at) < 0)
+        continue;
+      this->send_lc_threshold_set_to_(lamp, static_cast<uint32_t>(lamp.threshold_request));
+      lamp.at = now + FAST_CONTROL_STEP_MS;
+      if (++lamp.threshold_repeats >= 2) {
+        lamp.threshold_request = -1;
+        lamp.threshold_repeats = 0;
+        this->extra_poll_index_ = i;
+        this->extra_poll_kind_ = 5;  // relecture du seuil
+        this->extra_poll_at_ = now + 1500;
+      }
+      return;
+    }
+    if (lamp.step == 0) {
+      if (lamp.requested < 0)
+        continue;
+      lamp.active_mode = lamp.requested;
+      lamp.requested = -1;
+      lamp.tid = this->next_tid_();
+      lamp.step = 1;
+      lamp.at = now;
+    }
+    if (static_cast<int32_t>(now - lamp.at) < 0)
+      continue;
+    // Meme sequence que la lampe principale : LC, action, LC, action
+    const bool lc_step = lamp.step == 1 || lamp.step == 3;
+    if (lc_step || (lamp.active_mode == 0 && lamp.scene == 0))
+      this->send_lc_mode_set_to_(lamp.base + 1, lamp.active_mode == 0);
+    else if (lamp.active_mode == 0)
+      this->send_scene_recall_to_(lamp.base, lamp.scene, lamp.tid);
+    else
+      this->send_onoff_set_to_(lamp.base, lamp.active_mode == 1, lamp.tid);
+    lamp.at = now + FAST_CONTROL_STEP_MS;
+    if (++lamp.step > 4) {
+      lamp.step = 0;
+      // Relecture rapide de l'etat de cette lampe
+      this->extra_poll_index_ = i;
+      this->extra_poll_kind_ = 0;
+      this->extra_poll_at_ = now + 1500;
+    }
+    return;  // un message par passage de boucle
+  }
+}
+
+bool NightmatiqMesh::send_extra_get_(const ExtraLamp &lamp, uint8_t kind) {
+  esp_ble_mesh_client_common_param_t common{};
+  if (kind == 0) {
+    esp_ble_mesh_generic_client_get_state_t get{};
+    if (!this->set_common_(common, onoff_client.model, ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_GET, lamp.base))
+      return false;
+    if (!this->begin_access_operation_(AccessOperation::ONOFF_GET, ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_GET))
+      return false;
+    return this->record_access_send_result_(AccessOperation::ONOFF_GET, ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_GET,
+                                            esp_ble_mesh_generic_client_get_state(&common, &get));
+  }
+  if (kind == 1) {
+    esp_ble_mesh_light_client_get_state_t get{};
+    if (!this->set_common_(common, light_lc_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_GET,
+                           static_cast<uint16_t>(lamp.base + 1)))
+      return false;
+    if (!this->begin_access_operation_(AccessOperation::LC_MODE_GET, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_GET))
+      return false;
+    return this->record_access_send_result_(AccessOperation::LC_MODE_GET,
+                                            ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_GET,
+                                            esp_ble_mesh_light_client_get_state(&common, &get));
+  }
+  if (kind == 3) {
+    esp_ble_mesh_light_client_get_state_t get{};
+    if (!this->set_common_(common, light_lc_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET,
+                           static_cast<uint16_t>(lamp.base + 1)))
+      return false;
+    if (!this->begin_access_operation_(AccessOperation::THRESHOLD_GET,
+                                       ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET))
+      return false;
+    get.lc_property_get.property_id = LC_LIGHT_ON_THRESHOLD_PROPERTY;
+    return this->record_access_send_result_(AccessOperation::THRESHOLD_GET,
+                                            ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET,
+                                            esp_ble_mesh_light_client_get_state(&common, &get));
+  }
+  esp_ble_mesh_sensor_client_get_state_t get{};
+  if (!this->set_common_(common, sensor_client.model, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
+                         static_cast<uint16_t>(lamp.base + 3)))
+    return false;
+  if (!this->begin_access_operation_(AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET))
+    return false;
+  get.sensor_get.op_en = true;
+  get.sensor_get.property_id = AMBIENT_LIGHT_LEVEL_PROPERTY;
+  return this->record_access_send_result_(AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
+                                          esp_ble_mesh_sensor_client_get_state(&common, &get));
+}
+
+bool NightmatiqMesh::advance_extra_poll_(uint32_t now) {
+  if (this->extra_count_ == 0 || !this->mesh_ready_.load() ||
+      static_cast<int32_t>(now - this->extra_poll_at_) < 0)
+    return false;
+  if (this->extra_poll_index_ >= this->extra_count_)
+    this->extra_poll_index_ = 0;
+  ExtraLamp &lamp = this->extra_[this->extra_poll_index_];
+  if (lamp.discover > 0) {  // DISCOVER_SENSOR : toutes les proprietes des elements 2 et 3
+    const uint16_t target = static_cast<uint16_t>(lamp.base + 1 + lamp.discover);
+    lamp.discover--;
+    this->extra_poll_at_ = now + EXTRA_POLL_INTERVAL_MS;
+    esp_ble_mesh_client_common_param_t dcommon{};
+    esp_ble_mesh_sensor_client_get_state_t dget{};
+    if (!this->set_common_(dcommon, sensor_client.model, ESP_BLE_MESH_MODEL_OP_SENSOR_GET, target))
+      return false;
+    if (!this->begin_access_operation_(AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET))
+      return false;
+    dget.sensor_get.op_en = false;
+    return this->record_access_send_result_(AccessOperation::SENSOR_GET, ESP_BLE_MESH_MODEL_OP_SENSOR_GET,
+                                            esp_ble_mesh_sensor_client_get_state(&dcommon, &dget));
+  }
+  // Ordre : etat lumiere, mode LC, etat lumiere, luminosite
+  static const uint8_t KINDS[6] = {0, 1, 0, 2, 0, 3};
+  const bool sent = this->send_extra_get_(lamp, KINDS[this->extra_poll_kind_ % 6]);
+  this->extra_poll_index_ = (this->extra_poll_index_ + 1) % this->extra_count_;
+  if (this->extra_poll_index_ == 0 && ++this->extra_poll_kind_ > 5)
+    this->extra_poll_kind_ = 0;
+  this->extra_poll_at_ = now + EXTRA_POLL_INTERVAL_MS;
+  return sent;
+}
+
+bool NightmatiqMesh::handle_extra_sensor_(esp_ble_mesh_sensor_client_cb_param_t *param) {
+  ExtraLamp *lamp = this->find_extra_(param->params->ctx.addr);
+  if (lamp == nullptr)
+    return false;
+  lamp->rssi.store(param->params->ctx.recv_rssi);
+  lamp->rssi_valid.store(true);
+  net_buf_simple *buffer = param->status_cb.sensor_status.marshalled_sensor_data;
+  if (buffer == nullptr)
+    return true;
+  const uint8_t *data = buffer->data;
+  size_t remaining = buffer->len;
+  while (remaining > 0) {
+    const uint8_t format = ESP_BLE_MESH_GET_SENSOR_DATA_FORMAT(data);
+    const size_t mpid_length = format == ESP_BLE_MESH_SENSOR_DATA_FORMAT_A
+                                   ? ESP_BLE_MESH_SENSOR_DATA_FORMAT_A_MPID_LEN
+                                   : ESP_BLE_MESH_SENSOR_DATA_FORMAT_B_MPID_LEN;
+    if (remaining < mpid_length)
+      break;
+    const uint8_t encoded_length = ESP_BLE_MESH_GET_SENSOR_DATA_LENGTH(data, format);
+    const uint16_t property_id = ESP_BLE_MESH_GET_SENSOR_DATA_PROPERTY_ID(data, format);
+    if (encoded_length == ESP_BLE_MESH_SENSOR_DATA_ZERO_LEN) {
+      data += mpid_length;
+      remaining -= mpid_length;
+      continue;
+    }
+    const size_t value_length = static_cast<size_t>(encoded_length) + 1;
+    if (remaining < mpid_length + value_length)
+      break;
+    const uint8_t *value = data + mpid_length;
+    if (property_id != 0x0042 && property_id != AMBIENT_LIGHT_LEVEL_PROPERTY)
+      ESP_LOGI(TAG, "DISCOVER_SENSOR lampe 0x%04X src 0x%04X prop 0x%04X len %u val0 0x%02X",
+               lamp->base, param->params->ctx.addr, property_id, (unsigned) value_length, value[0]);
+    if (property_id == 0x0042 && value_length >= 1) {
+      lamp->motion_raw.store(value[0]);
+    } else if (property_id == AMBIENT_LIGHT_LEVEL_PROPERTY && value_length >= 3) {
+      const uint32_t raw = static_cast<uint32_t>(value[0]) |
+                           (static_cast<uint32_t>(value[1]) << 8) |
+                           (static_cast<uint32_t>(value[2]) << 16);
+      if (raw != 0xFFFFFF)  // LUX_UNKNOWN : 0xFFFFFF = valeur inconnue
+        lamp->lux_centilux.store(static_cast<int32_t>(raw));
+    }
+    data += mpid_length + value_length;
+    remaining -= mpid_length + value_length;
+  }
+  return true;
+}
+
+void NightmatiqMesh::set_lamp_tag(uint16_t base, uint16_t tag) {
+  ExtraLamp *lamp = this->find_extra_(base);
+  if (lamp != nullptr && lamp->base == base)
+    lamp->tag = tag;
+}
+
+void NightmatiqMesh::set_lamp_name(uint16_t base, const std::string &name) {
+  ExtraLamp *lamp = this->find_extra_(base);
+  if (lamp != nullptr && lamp->base == base)
+    lamp->name = name;
+}
+
+bool NightmatiqMesh::all_extra_identities_found_() const {
+  for (size_t i = 0; i < this->extra_count_; i++)
+    if (this->extra_[i].tag != 0 && !this->extra_[i].identity_valid.load())
+      return false;
+  return true;
+}
+
+bool NightmatiqMesh::send_lc_threshold_set_to_(ExtraLamp &lamp, uint32_t centilux) {
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_light_client_set_state_t set{};
+  if (!this->set_common_(common, light_lc_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_SET_UNACK,
+                         static_cast<uint16_t>(lamp.base + 1)))
+    return false;
+  lamp.threshold_storage[0] = centilux & 0xFF;
+  lamp.threshold_storage[1] = (centilux >> 8) & 0xFF;
+  lamp.threshold_storage[2] = (centilux >> 16) & 0xFF;
+  lamp.threshold_buffer.data = lamp.threshold_storage.data();
+  lamp.threshold_buffer.len = lamp.threshold_storage.size();
+  lamp.threshold_buffer.size = lamp.threshold_storage.size();
+  lamp.threshold_buffer.__buf = lamp.threshold_storage.data();
+  set.lc_property_set.property_id = LC_LIGHT_ON_THRESHOLD_PROPERTY;
+  set.lc_property_set.property_value = &lamp.threshold_buffer;
+  return this->record_send_result_(esp_ble_mesh_light_client_set_state(&common, &set));
+}
+
+void NightmatiqMesh::set_lamp_threshold(uint16_t base, float lux) {
+  ExtraLamp *lamp = this->find_extra_(base);
+  if (lamp == nullptr || lamp->base != base || !std::isfinite(lux) || lux < 1.0f || lux > 1500.0f)
+    return;
+  const int32_t centilux = static_cast<int32_t>(std::lround(lux * 100.0f));
+  lamp->threshold_request = centilux;
+  lamp->threshold_repeats = 0;
+  lamp->threshold_centilux.store(centilux);  // affichage immediat, confirme par relecture
+}
+
+float NightmatiqMesh::lamp_threshold(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  if (lamp == nullptr)
+    return NAN;
+  const int32_t centilux = lamp->threshold_centilux.load();
+  return centilux < 0 ? NAN : centilux / 100.0f;
+}
+
+std::string NightmatiqMesh::lamp_firmware(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  if (lamp == nullptr || !lamp->identity_valid.load())
+    return "";
+  char text[16];
+  std::snprintf(text, sizeof(text), "%u.%u.%u", lamp->fw_major.load(), lamp->fw_minor.load(),
+                lamp->fw_patch.load());
+  return text;
+}
+
+float NightmatiqMesh::lamp_hardware(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr || !lamp->identity_valid.load() ? NAN : static_cast<float>(lamp->hw.load());
+}
+
+float NightmatiqMesh::lamp_rssi(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr || !lamp->rssi_valid.load() ? NAN : static_cast<float>(lamp->rssi.load());
+}
+
+// ===================== Reglages LC (puissance, lumiere de base, temporisation) =====================
+static constexpr uint16_t LC_LIGHTNESS_ON_PROPERTY = 0x002E;       // Perceived Lightness (uint16)
+static constexpr uint16_t LC_LIGHTNESS_STANDBY_PROPERTY = 0x0030;  // Perceived Lightness (uint16)
+static constexpr uint16_t LC_TIME_RUN_ON_PROPERTY = 0x003C;        // Time Millisecond 24 (uint24)
+static constexpr uint32_t LC_PROPS_POLL_INTERVAL_MS = 3500;
+static const uint16_t LC_PROPS_IDS[3] = {LC_LIGHTNESS_ON_PROPERTY, LC_LIGHTNESS_STANDBY_PROPERTY,
+                                         LC_TIME_RUN_ON_PROPERTY};
+
+void NightmatiqMesh::add_lc_props(uint16_t base) {
+  if (base == 0 || this->lc_props_count_ >= this->lc_props_.size())
+    return;
+  for (size_t i = 0; i < this->lc_props_count_; i++)
+    if (this->lc_props_[i].base == base)
+      return;
+  this->lc_props_[this->lc_props_count_++].base = base;
+}
+
+NightmatiqMesh::LcProps *NightmatiqMesh::find_lc_props_(uint16_t address) {
+  for (size_t i = 0; i < this->lc_props_count_; i++)
+    if (address >= this->lc_props_[i].base && address < static_cast<uint32_t>(this->lc_props_[i].base) + 4)
+      return &this->lc_props_[i];
+  return nullptr;
+}
+
+const NightmatiqMesh::LcProps *NightmatiqMesh::find_lc_props_(uint16_t address) const {
+  for (size_t i = 0; i < this->lc_props_count_; i++)
+    if (address >= this->lc_props_[i].base && address < static_cast<uint32_t>(this->lc_props_[i].base) + 4)
+      return &this->lc_props_[i];
+  return nullptr;
+}
+
+std::atomic<int32_t> *NightmatiqMesh::lc_prop_slot_(LcProps &props, uint16_t property) {
+  if (property == LC_LIGHTNESS_ON_PROPERTY)
+    return &props.lightness_on;
+  if (property == LC_LIGHTNESS_STANDBY_PROPERTY)
+    return &props.lightness_standby;
+  if (property == LC_TIME_RUN_ON_PROPERTY)
+    return &props.time_run_on;
+  return nullptr;
+}
+
+bool NightmatiqMesh::handle_lc_prop_status_(uint16_t source,
+                                            const esp_ble_mesh_light_lc_property_status_cb_t &status) {
+  LcProps *props = this->find_lc_props_(source);
+  if (props == nullptr)
+    return false;
+  std::atomic<int32_t> *slot = lc_prop_slot_(*props, status.property_id);
+  if (slot == nullptr)
+    return false;  // autre propriete (ex. seuil 0x002B) : traitement normal
+  if (status.property_value != nullptr) {
+    const uint8_t *v = status.property_value->data;
+    const size_t len = status.property_value->len;
+    if (status.property_id == LC_TIME_RUN_ON_PROPERTY && len >= 3) {
+      const uint32_t raw = static_cast<uint32_t>(v[0]) | (static_cast<uint32_t>(v[1]) << 8) |
+                           (static_cast<uint32_t>(v[2]) << 16);
+      if (raw != 0xFFFFFF)
+        slot->store(static_cast<int32_t>(raw));
+    } else if (status.property_id != LC_TIME_RUN_ON_PROPERTY && len >= 2) {
+      slot->store(static_cast<int32_t>(static_cast<uint32_t>(v[0]) | (static_cast<uint32_t>(v[1]) << 8)));
+    }
+  }
+  ESP_LOGD(TAG, "Lampe 0x%04X : propriete LC 0x%04X = %d", props->base, status.property_id, (int) slot->load());
+  return true;
+}
+
+float NightmatiqMesh::lamp_lc_prop(uint16_t base, uint16_t property) const {
+  const LcProps *props = this->find_lc_props_(base);
+  if (props == nullptr || props->base != base)
+    return NAN;
+  int32_t raw = -1;
+  if (property == LC_LIGHTNESS_ON_PROPERTY)
+    raw = props->lightness_on.load();
+  else if (property == LC_LIGHTNESS_STANDBY_PROPERTY)
+    raw = props->lightness_standby.load();
+  else if (property == LC_TIME_RUN_ON_PROPERTY)
+    raw = props->time_run_on.load();
+  if (raw < 0)
+    return NAN;
+  if (property == LC_TIME_RUN_ON_PROPERTY)
+    return raw / 1000.0f;             // secondes
+  return raw * 100.0f / 65535.0f;     // pourcentage
+}
+
+void NightmatiqMesh::set_lamp_lc_prop(uint16_t base, uint16_t property, float value) {
+  LcProps *props = this->find_lc_props_(base);
+  if (props == nullptr || props->base != base || !std::isfinite(value))
+    return;
+  std::atomic<int32_t> *slot = lc_prop_slot_(*props, property);
+  if (slot == nullptr)
+    return;
+  int32_t raw;
+  if (property == LC_TIME_RUN_ON_PROPERTY) {
+    if (value < 0.0f || value > 16000.0f)
+      return;
+    raw = static_cast<int32_t>(std::lround(value * 1000.0f));
+  } else {
+    if (value < 0.0f || value > 100.0f)
+      return;
+    raw = static_cast<int32_t>(std::lround(value * 65535.0f / 100.0f));
+  }
+  props->pending_property = property;
+  props->pending_raw = raw;
+  props->repeats = 0;
+  slot->store(raw);  // affichage immediat, confirme par relecture
+}
+
+void NightmatiqMesh::advance_props_write_(uint32_t now) {
+  if (!this->mesh_ready_.load())
+    return;
+  for (size_t i = 0; i < this->lc_props_count_; i++) {
+    LcProps &props = this->lc_props_[i];
+    if (props.lightness_request >= 0 && static_cast<int32_t>(now - props.lightness_at) >= 0) {
+      if (props.lightness_repeats == 0)
+        props.lightness_tid = this->next_tid_();
+      esp_ble_mesh_client_common_param_t lcommon{};
+      esp_ble_mesh_light_client_set_state_t lset{};
+      if (this->set_common_(lcommon, lightness_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_SET_UNACK,
+                            props.base)) {
+        lset.lightness_set.op_en = false;
+        lset.lightness_set.lightness = static_cast<uint16_t>(props.lightness_request);
+        lset.lightness_set.tid = props.lightness_tid;
+        this->record_send_result_(esp_ble_mesh_light_client_set_state(&lcommon, &lset));
+      }
+      props.lightness_at = now + FAST_CONTROL_STEP_MS;
+      if (++props.lightness_repeats >= 2) {
+        props.lightness_request = -1;
+        props.lightness_repeats = 0;
+        this->lightness_poll_index_ = i;   // relecture de cette lampe
+        this->props_poll_tick_ = 0;
+        this->lc_props_poll_at_ = now + 1500;
+      }
+      return;
+    }
+    if (props.pending_raw < 0 || static_cast<int32_t>(now - props.at) < 0)
+      continue;
+    esp_ble_mesh_client_common_param_t common{};
+    esp_ble_mesh_light_client_set_state_t set{};
+    if (this->set_common_(common, light_lc_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_SET_UNACK,
+                          static_cast<uint16_t>(props.base + 1))) {
+      const uint32_t raw = static_cast<uint32_t>(props.pending_raw);
+      props.storage[0] = raw & 0xFF;
+      props.storage[1] = (raw >> 8) & 0xFF;
+      props.storage[2] = (raw >> 16) & 0xFF;
+      const size_t len = props.pending_property == LC_TIME_RUN_ON_PROPERTY ? 3 : 2;
+      props.buffer.data = props.storage.data();
+      props.buffer.len = len;
+      props.buffer.size = props.storage.size();
+      props.buffer.__buf = props.storage.data();
+      set.lc_property_set.property_id = props.pending_property;
+      set.lc_property_set.property_value = &props.buffer;
+      this->record_send_result_(esp_ble_mesh_light_client_set_state(&common, &set));
+    }
+    props.at = now + FAST_CONTROL_STEP_MS;
+    if (++props.repeats >= 2) {
+      props.pending_raw = -1;
+      props.repeats = 0;
+      this->lc_props_poll_index_ = i * 3;  // relecture de cette lampe
+      this->lc_props_poll_at_ = now + 1500;
+    }
+    return;  // un message par passage de boucle
+  }
+}
+
+bool NightmatiqMesh::advance_props_poll_(uint32_t now) {
+  if (this->lc_props_count_ == 0 || !this->mesh_ready_.load() ||
+      static_cast<int32_t>(now - this->lc_props_poll_at_) < 0)
+    return false;
+  if ((this->props_poll_tick_++ & 1) == 0) {
+    const LcProps &lamp = this->lc_props_[this->lightness_poll_index_ % this->lc_props_count_];
+    this->lightness_poll_index_ = (this->lightness_poll_index_ + 1) % this->lc_props_count_;
+    this->lc_props_poll_at_ = now + LC_PROPS_POLL_INTERVAL_MS;
+    esp_ble_mesh_client_common_param_t lcommon{};
+    esp_ble_mesh_light_client_get_state_t lget{};
+    if (!this->set_common_(lcommon, lightness_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_GET, lamp.base))
+      return false;
+    if (!this->begin_access_operation_(AccessOperation::LC_MODE_GET, ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_GET))
+      return false;
+    return this->record_access_send_result_(AccessOperation::LC_MODE_GET, ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_GET,
+                                            esp_ble_mesh_light_client_get_state(&lcommon, &lget));
+  }
+  const size_t total = this->lc_props_count_ * 3;
+  if (this->lc_props_poll_index_ >= total)
+    this->lc_props_poll_index_ = 0;
+  const LcProps &props = this->lc_props_[this->lc_props_poll_index_ / 3];
+  const uint16_t property = LC_PROPS_IDS[this->lc_props_poll_index_ % 3];
+  this->lc_props_poll_index_ = (this->lc_props_poll_index_ + 1) % total;
+  this->lc_props_poll_at_ = now + LC_PROPS_POLL_INTERVAL_MS;
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_light_client_get_state_t get{};
+  if (!this->set_common_(common, light_lc_client.model, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET,
+                         static_cast<uint16_t>(props.base + 1)))
+    return false;
+  if (!this->begin_access_operation_(AccessOperation::THRESHOLD_GET, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET))
+    return false;
+  get.lc_property_get.property_id = property;
+  return this->record_access_send_result_(AccessOperation::THRESHOLD_GET, ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_GET,
+                                          esp_ble_mesh_light_client_get_state(&common, &get));
+}
+
+void NightmatiqMesh::set_lamp_lightness(uint16_t base, float percent) {
+  LcProps *props = this->find_lc_props_(base);
+  if (props == nullptr || props->base != base || !std::isfinite(percent) || percent < 0.0f || percent > 100.0f)
+    return;
+  const int32_t raw = static_cast<int32_t>(std::lround(percent * 65535.0f / 100.0f));
+  props->lightness_request = raw;
+  props->lightness_repeats = 0;
+  props->lightness.store(raw);  // affichage immediat, confirme par relecture
+}
+
+float NightmatiqMesh::lamp_lightness(uint16_t base) const {
+  const LcProps *props = this->find_lc_props_(base);
+  if (props == nullptr || props->base != base)
+    return NAN;
+  const int32_t raw = props->lightness.load();
+  return raw < 0 ? NAN : raw * 100.0f / 65535.0f;
+}
+
+int NightmatiqMesh::lamp_motion(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->motion_raw.load();
+}
+
+float NightmatiqMesh::lamp_lux(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  if (lamp == nullptr)
+    return NAN;
+  const int32_t centilux = lamp->lux_centilux.load();
+  return centilux < 0 ? NAN : centilux / 100.0f;
+}
+
+int NightmatiqMesh::lamp_output(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->onoff.load();
+}
+
+int NightmatiqMesh::lamp_lc_mode(uint16_t base) const {
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->lc_mode.load();
 }
 
 bool NightmatiqMesh::send_device_revision_catalog_get_() {
@@ -1759,6 +2531,17 @@ void NightmatiqMesh::generic_callback(esp_ble_mesh_generic_client_cb_event_t eve
     self->complete_access_operation_(param->params->opcode, false);
     return;
   }
+  if (ExtraLamp *lamp = self->find_extra_(param->params->ctx.addr)) {
+    lamp->rssi.store(param->params->ctx.recv_rssi);
+    lamp->rssi_valid.store(true);
+    lamp->onoff.store(param->status_cb.onoff_status.present_onoff != 0 ? 1 : 0);
+    self->complete_access_operation_(param->params->opcode, true);
+    return;
+  }
+  if (event == ESP_BLE_MESH_GENERIC_CLIENT_PUBLISH_EVT &&
+      (param->params->ctx.addr < self->config_.onoff_address ||
+       param->params->ctx.addr >= self->config_.onoff_address + 4))
+    return;  // publication d'une lampe non geree
   self->mesh_rx_messages_.fetch_add(1);
   self->mesh_generic_rx_.fetch_add(1);
   self->record_mesh_rssi_(param->params->ctx);
@@ -1783,6 +2566,10 @@ void NightmatiqMesh::sensor_callback(esp_ble_mesh_sensor_client_cb_event_t event
   if (param->error_code != 0 || param->params->ctx.recv_op != ESP_BLE_MESH_MODEL_OP_SENSOR_STATUS) {
     self->revision_catalog_in_flight_.store(false);
     self->complete_access_operation_(param->params->opcode, false);
+    return;
+  }
+  if (self->handle_extra_sensor_(param)) {
+    self->complete_access_operation_(param->params->opcode, true);
     return;
   }
   self->mesh_rx_messages_.fetch_add(1);
@@ -1835,9 +2622,11 @@ void NightmatiqMesh::sensor_callback(esp_ble_mesh_sensor_client_cb_event_t event
       const uint32_t centilux = static_cast<uint32_t>(value[0]) |
                                (static_cast<uint32_t>(value[1]) << 8) |
                                (static_cast<uint32_t>(value[2]) << 16);
-      self->pending_lux_centilux_.store(centilux);
-      self->lux_received_.store(true);
-      self->lux_publish_pending_.store(true);
+      if (centilux != 0xFFFFFF) {  // LUX_UNKNOWN
+        self->pending_lux_centilux_.store(centilux);
+        self->lux_received_.store(true);
+        self->lux_publish_pending_.store(true);
+      }
     } else if (property_id == 0x0042 && value_length >= 1) {
       if (param->params->ctx.addr == static_cast<uint16_t>(self->config_.onoff_address + 2))
         self->motion_raw_.store(data[mpid_length]);
@@ -1876,10 +2665,43 @@ void NightmatiqMesh::light_callback(esp_ble_mesh_light_client_cb_event_t event,
   }
   const uint32_t received = param->params->ctx.recv_op;
   const bool recognized = received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_STATUS ||
+                          received == ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_STATUS ||
                           received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_LIGHT_ONOFF_STATUS ||
                           received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_STATUS;
   if (!recognized) {
     self->complete_access_operation_(param->params->opcode, false);
+    return;
+  }
+  if (received == ESP_BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_STATUS) {
+    if (LcProps *props = self->find_lc_props_(param->params->ctx.addr))
+      props->lightness.store(param->status_cb.lightness_status.present_lightness);
+    self->complete_access_operation_(param->params->opcode, true);
+    return;
+  }
+  if (received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_STATUS &&
+      self->handle_lc_prop_status_(param->params->ctx.addr, param->status_cb.lc_property_status)) {
+    self->complete_access_operation_(param->params->opcode, true);
+    return;
+  }
+  if (ExtraLamp *lamp = self->find_extra_(param->params->ctx.addr)) {
+    lamp->rssi.store(param->params->ctx.recv_rssi);
+    lamp->rssi_valid.store(true);
+    if (received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_MODE_STATUS)
+      lamp->lc_mode.store(param->status_cb.lc_mode_status.mode ? 1 : 0);
+    else if (received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_LIGHT_ONOFF_STATUS)
+      lamp->onoff.store(param->status_cb.lc_light_onoff_status.present_light_onoff != 0 ? 1 : 0);
+    else if (received == ESP_BLE_MESH_MODEL_OP_LIGHT_LC_PROPERTY_STATUS) {
+      const auto &status = param->status_cb.lc_property_status;
+      if (status.property_id == LC_LIGHT_ON_THRESHOLD_PROPERTY && status.property_value != nullptr &&
+          status.property_value->len >= 3) {
+        const uint8_t *v = status.property_value->data;
+        const uint32_t centilux = static_cast<uint32_t>(v[0]) | (static_cast<uint32_t>(v[1]) << 8) |
+                                  (static_cast<uint32_t>(v[2]) << 16);
+        if (centilux >= 100 && centilux <= 150000)
+          lamp->threshold_centilux.store(static_cast<int32_t>(centilux));
+      }
+    }
+    self->complete_access_operation_(param->params->opcode, true);
     return;
   }
   self->mesh_rx_messages_.fetch_add(1);
@@ -2033,13 +2855,18 @@ void NightmatiqMesh::publish_pending_() {
   if (this->threshold_invalidate_pending_.exchange(false)) {
     if (this->threshold_number_ != nullptr)
       this->threshold_number_->publish_state(NAN);
+    this->last_published_threshold_ = 0xFFFFFFFF;
   }
   if (this->threshold_publish_pending_.exchange(false)) {
-    if (this->threshold_number_ != nullptr)
-      this->threshold_number_->publish_state(this->pending_threshold_centilux_.load() / 100.0f);
+    const uint32_t threshold = this->pending_threshold_centilux_.load();
+    if (this->threshold_number_ != nullptr && threshold != this->last_published_threshold_) {
+      this->last_published_threshold_ = threshold;
+      this->threshold_number_->publish_state(threshold / 100.0f);
+    }
   }
   const int8_t mode = this->mode_publish_pending_.exchange(-1);
-  if (mode >= 0 && this->mode_select_ != nullptr) {
+  if (mode >= 0 && mode != this->last_published_mode_ && this->mode_select_ != nullptr) {
+    this->last_published_mode_ = mode;
     if (mode == 0)
       this->mode_select_->publish_state("Auto");
     else if (mode == 1)
@@ -2137,6 +2964,8 @@ void NightmatiqMesh::loop() {
     this->request_refresh();
   }
   this->expire_access_operation_(now);
+  this->advance_extra_modes_(now);
+  this->advance_props_write_(now);
   this->advance_address_recovery_(now);
   if (this->reboot_pending_.load())
     return;
@@ -2201,6 +3030,11 @@ void NightmatiqMesh::loop() {
   }
 
   if (this->access_operation_.load() != AccessOperation::NONE)
+    return;
+
+  if (this->poll_stage_ == 0 && this->advance_extra_poll_(now))
+    return;
+  if (this->poll_stage_ == 0 && this->advance_props_poll_(now))
     return;
 
   if (this->poll_stage_ != 0 && static_cast<int32_t>(now - this->poll_stage_at_) >= 0) {
