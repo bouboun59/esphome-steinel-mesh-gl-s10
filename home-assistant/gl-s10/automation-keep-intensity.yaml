@@ -1,0 +1,88 @@
+# Steinel GL-S10 fork - keep the chosen brightness
+# FR : conserver l'intensite choisie.
+#
+# Why: the Auto mode recalls the Steinel scene 3, and a Bluetooth Mesh scene also stores the
+# Light LC properties. Every return to Auto therefore resets the detector "power"
+# (LC Lightness On, 0x002E) to the value saved by the Steinel app.
+# This automation rewrites it with the memorised intensity (input_number set by the slider).
+#
+# Paste into Settings > Automations > (new) > Edit in YAML. Example for 3 luminaires.
+alias: Steinel – conserver l'intensité mémorisée
+description: >-
+  Réécrit la Puissance du détecteur avec l'intensité mémorisée après un retour en Auto
+  (la scène Steinel 3 la remet à la valeur de l'appli).
+mode: queued
+max: 10
+triggers:
+  - trigger: state
+    entity_id: select.steinel_13e8d4_applique_entree_mode
+    to: Auto
+    for: {seconds: 3}
+    id: entree
+  - trigger: state
+    entity_id: number.reseau_steinel_applique_entree_puissance
+    not_to: [unknown, unavailable]
+    id: entree
+  - trigger: state
+    entity_id: select.steinel_13e8d4_applique_devant_mode
+    to: Auto
+    for: {seconds: 3}
+    id: devant
+  - trigger: state
+    entity_id: number.reseau_steinel_applique_devant_puissance
+    not_to: [unknown, unavailable]
+    id: devant
+  - trigger: state
+    entity_id: select.steinel_13e8d4_applique_garage_mode
+    to: Auto
+    for: {seconds: 3}
+    id: garage
+  - trigger: state
+    entity_id: number.reseau_steinel_applique_garage_puissance
+    not_to: [unknown, unavailable]
+    id: garage
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: entree
+          # Mode trigger: always rewrite. Power trigger: only if it differs by more than 1 %.
+          - condition: template
+            value_template: >-
+              {{ trigger.to_state.domain == 'select' or
+                 (states('number.reseau_steinel_applique_entree_puissance') | float(0)
+                  - states('input_number.applique_entree_intensite_memorisee') | float(0)) | abs > 1 }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.reseau_steinel_applique_entree_puissance
+            data:
+              value: "{{ states('input_number.applique_entree_intensite_memorisee') | float(93) | round(0) }}"
+      - conditions:
+          - condition: trigger
+            id: devant
+          - condition: template
+            value_template: >-
+              {{ trigger.to_state.domain == 'select' or
+                 (states('number.reseau_steinel_applique_devant_puissance') | float(0)
+                  - states('input_number.applique_devant_intensite_memorisee') | float(0)) | abs > 1 }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.reseau_steinel_applique_devant_puissance
+            data:
+              value: "{{ states('input_number.applique_devant_intensite_memorisee') | float(93) | round(0) }}"
+      - conditions:
+          - condition: trigger
+            id: garage
+          - condition: template
+            value_template: >-
+              {{ trigger.to_state.domain == 'select' or
+                 (states('number.reseau_steinel_applique_garage_puissance') | float(0)
+                  - states('input_number.applique_garage_intensite_memorisee') | float(0)) | abs > 1 }}
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.reseau_steinel_applique_garage_puissance
+            data:
+              value: "{{ states('input_number.applique_garage_intensite_memorisee') | float(93) | round(0) }}"
