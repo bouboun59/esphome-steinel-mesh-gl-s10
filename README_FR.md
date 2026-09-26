@@ -16,6 +16,8 @@ Ce fork adapte le projet à un autre usage :
 - il fournit une **couche Home Assistant** prête à l'emploi : lumières variables, onglet de tableau de bord
   et automatisation qui conserve l'intensité choisie.
 
+![Architecture de la passerelle Steinel Mesh GL-S10](docs/images/architecture.fr.svg)
+
 > ⚠️ Projet communautaire, **sans lien avec STEINEL, ni approuvé ni supporté par STEINEL**.
 > Il a été développé et testé sur une seule installation (1× L42 SC, 2× L 810 SC). D'autres produits
 > Steinel Connect peuvent se comporter différemment. Utilisation à vos risques, et gardez toujours un moyen
@@ -81,6 +83,8 @@ Steinel, modes Auto/On/Off de la lampe principale, OTA, safe mode…
 
 ### LEDs en façade
 
+![LEDs en façade du GL-S10](docs/images/gl-s10-leds.fr.svg)
+
 | LED | GPIO | Comportement |
 |---|---|---|
 | Alimentation | 14 | allumée dès que le firmware tourne |
@@ -96,6 +100,8 @@ en même temps**. Utilisez un autre ESP32 pour le proxy Bluetooth ESPHome.
 > d'alimentation). Des pertes de paquets sont signalées sur certaines révisions récentes équipées de l'IP101.
 
 ### Adaptateur série (premier flash / récupération)
+
+![Câblage série du GL-S10](docs/images/serial-wiring.fr.svg)
 
 - **Adaptateur USB-TTL 3,3 V** avec une vraie puce **FTDI FT232RL** ou **Silicon Labs CP2102**.
   Les adaptateurs **PL2303** contrefaits ne fonctionnent pas sous les versions récentes de macOS.
@@ -114,6 +120,8 @@ Tout ce qui suit a été lu dans la sauvegarde cloud Steinel (`/project/network/
 *Mesh Configuration Database*), puis confirmé sur le trafic réel.
 
 ### Composition d'une L42 SC / L 810 SC (4 éléments)
+
+![Éléments Bluetooth Mesh d'une lampe Steinel](docs/images/lamp-elements.fr.svg)
 
 | Élément | Adresse | Principaux modèles | Rôle |
 |---|---|---|---|
@@ -345,6 +353,8 @@ Alternative sans toucher au firmware : une réservation DHCP sur votre box pour 
 ---
 
 ## 8. ESPHome Device Builder (Home Assistant)
+
+![Développement et déploiement](docs/images/workflow.fr.svg)
 
 Vous pouvez compiler et installer la passerelle **directement depuis Home Assistant** (testé : Device Builder 2026.9.0).
 Le composant est téléchargé depuis GitHub à chaque compilation : le seul fichier dans Home Assistant est le YAML.

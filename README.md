@@ -16,6 +16,8 @@ This fork adapts the project to a different use case:
 - ships a ready-to-use **Home Assistant layer**: dimmable light entities, a dashboard tab
   and an automation that keeps your chosen brightness.
 
+![Architecture of the GL-S10 Steinel Mesh gateway](docs/images/architecture.svg)
+
 > ⚠️ Community project, **not affiliated with, endorsed or supported by STEINEL**.
 > It was developed and tested on one installation (1× L42 SC, 2× L 810 SC). Other Steinel
 > Connect products may behave differently. Use at your own risk and keep a way to re-flash
@@ -81,6 +83,8 @@ Auto/On/Off modes of the primary lamp, OTA, safe mode…) is kept.
 
 ### Front LEDs
 
+![GL-S10 front LEDs](docs/images/gl-s10-leds.svg)
+
 | LED | GPIO | Behaviour |
 |---|---|---|
 | Power | 14 | on as soon as the firmware runs |
@@ -96,6 +100,8 @@ same time**. Use another ESP32 for the ESPHome Bluetooth proxy.
 > Newer IP101 revisions are reported to suffer from packet loss on some networks.
 
 ### Serial adapter (first flash / recovery)
+
+![Serial wiring of the GL-S10](docs/images/serial-wiring.svg)
 
 - **3.3 V USB-TTL adapter** with a genuine **FTDI FT232RL** or **Silicon Labs CP2102** chip.
   Counterfeit **PL2303** adapters do not work on recent macOS.
@@ -114,6 +120,8 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 *Mesh Configuration Database* JSON) and confirmed with live traffic.
 
 ### Composition of an L42 SC / L 810 SC (4 elements)
+
+![Bluetooth Mesh elements of a Steinel luminaire](docs/images/lamp-elements.svg)
 
 | Element | Address | Main models | Role |
 |---|---|---|---|
@@ -343,6 +351,8 @@ Alternative without firmware change: a DHCP reservation on your router for the g
 ---
 
 ## 8. ESPHome Device Builder (Home Assistant)
+
+![Development and deployment workflow](docs/images/workflow.svg)
 
 You can build and install the gateway **directly from Home Assistant** (tested: Device Builder 2026.9.0).
 The component is downloaded from GitHub at every build, so the only file in Home Assistant is the YAML.
