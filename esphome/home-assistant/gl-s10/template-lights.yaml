@@ -1,0 +1,88 @@
+# Steinel GL-S10 fork - Home Assistant: dimmable light per luminaire
+# FR : une lumiere variable par applique (a mettre dans configuration.yaml ou un package).
+#
+# Example for ONE luminaire ("Applique Devant", base address 0x0013).
+# Duplicate the input_number + light block for each luminaire and replace
+# "devant" by your own entity slugs. Entity IDs below come from the tested install
+# (device named "Reseau Steinel" / "steinel_13e8d4"): adapt them to yours.
+#
+# The same lights can also be created from the UI:
+# Settings > Devices & services > Helpers > Template > Light.
+
+input_number:
+  applique_devant_intensite_memorisee:
+    name: Applique Devant intensité mémorisée
+    icon: mdi:brightness-percent
+    min: 1
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+
+template:
+  - light:
+      - name: Applique Devant
+        unique_id: applique_devant
+        # State = real light state reported by the lamp
+        state: "{{ is_state('binary_sensor.steinel_13e8d4_applique_devant_lumiere', 'on') }}"
+        # Brightness = live Intensity (0-100 %) converted to 0-255
+        level: "{{ (states('number.reseau_steinel_applique_devant_intensite') | float(0) * 2.55) | round(0) }}"
+        # Turn on: memorised intensity first (no flash), then Always On
+        turn_on:
+          - action: number.set_value
+            target:
+              entity_id: number.reseau_steinel_applique_devant_intensite
+            data:
+              value: "{{ states('input_number.applique_devant_intensite_memorisee') | float(93) | round(0) }}"
+          - action: select.select_option
+            target:
+              entity_id: select.steinel_13e8d4_applique_devant_mode
+            data:
+              option: Always On
+        # Turn off: back to Auto, the detector takes over again
+        turn_off:
+          - action: select.select_option
+            target:
+              entity_id: select.steinel_13e8d4_applique_devant_mode
+            data:
+              option: Auto
+        # Slider: 0 % = Auto ; otherwise intensity now + Always On + memorise + detector power
+        set_level:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ brightness | int(0) == 0 }}"
+                sequence:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.steinel_13e8d4_applique_devant_mode
+                    data:
+                      option: Auto
+            default:
+              - action: number.set_value
+                target:
+                  entity_id: number.reseau_steinel_applique_devant_intensite
+                data:
+                  value: "{{ [1, (brightness | int(0) / 2.55) | round(0)] | max }}"
+              - if:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: select.steinel_13e8d4_applique_devant_mode
+                        state: Always On
+                then:
+                  - action: select.select_option
+                    target:
+                      entity_id: select.steinel_13e8d4_applique_devant_mode
+                    data:
+                      option: Always On
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.applique_devant_intensite_memorisee
+                data:
+                  value: "{{ [1, (brightness | int(0) / 2.55) | round(0)] | max }}"
+              - action: number.set_value
+                target:
+                  entity_id: number.reseau_steinel_applique_devant_puissance
+                data:
+                  value: "{{ [1, (brightness | int(0) / 2.55) | round(0)] | max }}"

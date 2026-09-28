@@ -1,0 +1,89 @@
+# Steinel GL-S10 fork - dashboard tab (sections view)
+# FR : onglet de tableau de bord. Tableau de bord > modifier > + (nouvelle vue) > ⋮ > Modifier en YAML.
+title: Steinel
+path: steinel
+icon: mdi:coach-lamp
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Applique Entrée
+        icon: mdi:coach-lamp
+      - type: tile
+        entity: light.applique_entree
+        name: Lumière
+        features_position: bottom
+        features:
+          - type: light-brightness
+        grid_options: {columns: 12}
+      - type: tile
+        entity: binary_sensor.steinel_13e8d4_applique_entree_mouvement
+        name: Détection
+        grid_options: {columns: 6}
+      - type: tile
+        entity: sensor.steinel_13e8d4_applique_entree_luminosite
+        name: Luminosité
+        grid_options: {columns: 6}
+      - type: tile
+        entity: select.steinel_13e8d4_applique_entree_mode
+        name: Mode
+        features_position: inline
+        features:
+          - type: select-options
+        grid_options: {columns: 12}
+  - type: grid
+    cards:
+      - type: heading
+        heading: Applique Devant
+        icon: mdi:coach-lamp
+      - type: tile
+        entity: light.applique_devant
+        name: Lumière
+        features_position: bottom
+        features:
+          - type: light-brightness
+        grid_options: {columns: 12}
+      - type: tile
+        entity: binary_sensor.steinel_13e8d4_applique_devant_mouvement
+        name: Détection
+        grid_options: {columns: 6}
+      - type: tile
+        entity: sensor.steinel_13e8d4_applique_devant_luminosite
+        name: Luminosité
+        grid_options: {columns: 6}
+      - type: tile
+        entity: select.steinel_13e8d4_applique_devant_mode
+        name: Mode
+        features_position: inline
+        features:
+          - type: select-options
+        grid_options: {columns: 12}
+  - type: grid
+    cards:
+      - type: heading
+        heading: Applique Garage
+        icon: mdi:coach-lamp
+      - type: tile
+        entity: light.applique_garage
+        name: Lumière
+        features_position: bottom
+        features:
+          - type: light-brightness
+        grid_options: {columns: 12}
+      - type: tile
+        entity: binary_sensor.steinel_13e8d4_applique_garage_mouvement
+        name: Détection
+        grid_options: {columns: 6}
+      - type: tile
+        entity: sensor.steinel_13e8d4_applique_garage_luminosite
+        name: Luminosité
+        grid_options: {columns: 6}
+      - type: tile
+        entity: select.steinel_13e8d4_applique_garage_mode
+        name: Mode
+        features_position: inline
+        features:
+          - type: select-options
+        grid_options: {columns: 12}

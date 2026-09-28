@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 445" width="1000" height="445" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" role="img" aria-label="Architecture of the GL-S10 Steinel Mesh gateway">
+<title>Architecture of the GL-S10 Steinel Mesh gateway</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6b7a"/></marker></defs>
+<rect x="0" y="0" width="1000" height="445" rx="14" fill="#ffffff" stroke="#d5dae1"/>
+<text x="30" y="42" font-size="20" font-weight="bold" fill="#1d2330" text-anchor="start">Architecture — passerelle Steinel Mesh GL-S10</text>
+<rect x="30" y="70" width="250" height="250" rx="10" fill="#e8f1fd" stroke="#1f6fd6" stroke-width="1.6"/>
+<text x="155" y="100" font-size="17" font-weight="bold" fill="#1d2330" text-anchor="middle">Home Assistant</text>
+<text x="48" y="132" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Intégration ESPHome</text>
+<text x="48" y="151" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Onglet Steinel</text>
+<text x="48" y="170" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Lumières variables (modèles)</text>
+<text x="48" y="189" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Automatisation « intensité »</text>
+<text x="48" y="208" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• ESPHome Device Builder</text>
+<text x="48" y="227" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">   (compilation et OTA)</text>
+<rect x="360" y="70" width="270" height="250" rx="10" fill="#e9f7ef" stroke="#1f9d55" stroke-width="1.6"/>
+<text x="495" y="100" font-size="17" font-weight="bold" fill="#1d2330" text-anchor="middle">GL.iNet GL-S10 (ESPHome)</text>
+<text x="378" y="132" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• ESP32-D0WD · Ethernet IP101</text>
+<text x="378" y="151" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Nœud Bluetooth Mesh 0x11E2</text>
+<text x="378" y="170" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Lampe principale + autres</text>
+<text x="378" y="189" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• Interface web FR/EN (port 80)</text>
+<text x="378" y="208" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• ESPHome API (port 6053)</text>
+<text x="378" y="227" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="start">• 3 LEDs d’état</text>
+<line x1="282" y1="195" x2="358" y2="195" stroke="#5f6b7a" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="320" y="180" font-size="12" font-weight="bold" fill="#5f6b7a" text-anchor="middle">Ethernet</text>
+<text x="320" y="216" font-size="12" font-weight="normal" fill="#5f6b7a" text-anchor="middle">API / OTA</text>
+<rect x="720" y="70" width="250" height="70" rx="10" fill="#fff6e0" stroke="#d98b00" stroke-width="1.6"/>
+<text x="845" y="98" font-size="15" font-weight="bold" fill="#1d2330" text-anchor="middle">Applique Entrée</text>
+<text x="845" y="120" font-size="12" font-weight="normal" fill="#5f6b7a" text-anchor="middle">L42 SC · 0x000F · principale</text>
+<line x1="632" y1="195" x2="718" y2="105" stroke="#5f6b7a" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<rect x="720" y="158" width="250" height="70" rx="10" fill="#fff6e0" stroke="#d98b00" stroke-width="1.6"/>
+<text x="845" y="186" font-size="15" font-weight="bold" fill="#1d2330" text-anchor="middle">Applique Devant</text>
+<text x="845" y="208" font-size="12" font-weight="normal" fill="#5f6b7a" text-anchor="middle">L 810 SC · 0x0013</text>
+<line x1="632" y1="195" x2="718" y2="193" stroke="#5f6b7a" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<rect x="720" y="246" width="250" height="70" rx="10" fill="#fff6e0" stroke="#d98b00" stroke-width="1.6"/>
+<text x="845" y="274" font-size="15" font-weight="bold" fill="#1d2330" text-anchor="middle">Applique Garage</text>
+<text x="845" y="296" font-size="12" font-weight="normal" fill="#5f6b7a" text-anchor="middle">L 810 SC · 0x0017</text>
+<line x1="632" y1="195" x2="718" y2="281" stroke="#5f6b7a" stroke-width="1.8" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="675" y="330" font-size="12" font-weight="bold" fill="#5f6b7a" text-anchor="middle">Bluetooth Mesh</text>
+<rect x="360" y="350" width="270" height="70" rx="10" fill="#fde8ec" stroke="#c93a58" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="495" y="378" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="middle">Groupe 0xC001 → mouvement</text>
+<text x="495" y="397" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="middle">Groupe 0xC000 → luminosité</text>
+<polyline points="845,318 845,385 634,385" fill="none" stroke="#c93a58" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#a)"/>
+<line x1="495" y1="348" x2="495" y2="324" stroke="#c93a58" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#a)"/>
+<text x="740" y="405" font-size="12" font-weight="normal" fill="#c93a58" text-anchor="start">publié par les lampes</text>
+<rect x="30" y="350" width="250" height="70" rx="10" fill="#f3f0fb" stroke="#7a5cc4" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="155" y="378" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="middle">Cloud Steinel Connect</text>
+<text x="155" y="397" font-size="13" font-weight="normal" fill="#1d2330" text-anchor="middle">sauvegarde réseau (installation)</text>
+<line x1="282" y1="385" x2="358" y2="300" stroke="#7a5cc4" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#a)"/>
+</svg>
