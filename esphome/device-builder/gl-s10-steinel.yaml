@@ -174,7 +174,7 @@ api:
   encryption:
     key: !secret api_encryption_key
   reboot_timeout: 0s
-  max_connections: 2
+  max_connections: 3
   listen_backlog: 1
   max_send_queue: 4
   batch_delay: 500ms

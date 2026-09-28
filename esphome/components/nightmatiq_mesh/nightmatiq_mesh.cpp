@@ -2006,7 +2006,11 @@ void NightmatiqMesh::advance_props_write_(uint32_t now) {
     if (++props.repeats >= 2) {
       props.pending_raw = -1;
       props.repeats = 0;
-      this->lc_props_poll_index_ = i * 3;  // relecture de cette lampe
+      size_t k = 0;
+      while (k < 3 && LC_PROPS_IDS[k] != props.pending_property)
+        k++;
+      this->lc_props_poll_index_ = i * 3 + (k < 3 ? k : 0);  // relecture de la propriete ecrite
+      this->props_poll_tick_ = 7;                            // prochaine lecture = cette propriete
       this->lc_props_poll_at_ = now + 1500;
     }
     return;  // un message par passage de boucle
@@ -2017,7 +2021,7 @@ bool NightmatiqMesh::advance_props_poll_(uint32_t now) {
   if (this->lc_props_count_ == 0 || !this->mesh_ready_.load() ||
       static_cast<int32_t>(now - this->lc_props_poll_at_) < 0)
     return false;
-  if ((this->props_poll_tick_++ & 1) == 0) {
+  if ((this->props_poll_tick_++ % 8) != 7) {  // PROPS_SLOW_V1 : 7 lectures d intensite pour 1 propriete LC
     const LcProps &lamp = this->lc_props_[this->lightness_poll_index_ % this->lc_props_count_];
     this->lightness_poll_index_ = (this->lightness_poll_index_ + 1) % this->lc_props_count_;
     this->lc_props_poll_at_ = now + LC_PROPS_POLL_INTERVAL_MS;
