@@ -48,3 +48,9 @@ Desktop.ini
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Configuration personnelle / personal configuration
+esphome/gl-s10-garage.yaml
+
+# Firmware compile (contient les secrets) / compiled firmware (contains secrets)
+*.bin

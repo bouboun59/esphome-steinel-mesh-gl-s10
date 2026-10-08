@@ -27,6 +27,15 @@ sections:
         name: Luminosité
         grid_options: {columns: 6}
       - type: tile
+        entity: number.steinel_13e8d4_applique_entree_seuil
+        name: Seuil crépusculaire
+        icon: mdi:weather-sunset
+        features_position: bottom
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: {columns: 12}
+      - type: tile
         entity: select.steinel_13e8d4_applique_entree_mode
         name: Mode
         features_position: inline
@@ -54,6 +63,15 @@ sections:
         name: Luminosité
         grid_options: {columns: 6}
       - type: tile
+        entity: number.steinel_13e8d4_applique_devant_seuil
+        name: Seuil crépusculaire
+        icon: mdi:weather-sunset
+        features_position: bottom
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: {columns: 12}
+      - type: tile
         entity: select.steinel_13e8d4_applique_devant_mode
         name: Mode
         features_position: inline
@@ -80,6 +98,15 @@ sections:
         entity: sensor.steinel_13e8d4_applique_garage_luminosite
         name: Luminosité
         grid_options: {columns: 6}
+      - type: tile
+        entity: number.steinel_13e8d4_applique_garage_seuil
+        name: Seuil crépusculaire
+        icon: mdi:weather-sunset
+        features_position: bottom
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: {columns: 12}
       - type: tile
         entity: select.steinel_13e8d4_applique_garage_mode
         name: Mode

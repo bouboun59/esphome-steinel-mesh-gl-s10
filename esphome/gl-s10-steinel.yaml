@@ -629,7 +629,7 @@ number:
     icon: mdi:brightness-6
     unit_of_measurement: lx
     min_value: 1
-    max_value: 1500
+    max_value: 40
     step: 1
     mode: slider
     update_interval: 1s
@@ -646,7 +646,7 @@ number:
     icon: mdi:brightness-6
     unit_of_measurement: lx
     min_value: 1
-    max_value: 1500
+    max_value: 40
     step: 1
     mode: slider
     update_interval: 1s
@@ -664,7 +664,7 @@ number:
     icon: mdi:brightness-6
     unit_of_measurement: lx
     min_value: 1
-    max_value: 1500
+    max_value: 40
     step: 1
     mode: slider
     set_action:

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Steinel Mesh</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#1d2330;--mut:#6b7280;--line:#e3e6ea;--acc:#0b72e7;--ok:#1f9d55;--warn:#d98b00;--bad:#d64545;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2027;--fg:#e8ebef;--mut:#9aa3ad;--line:#2b323b;--acc:#4ea1ff}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:18px;margin:0;flex:1 1 auto}h2{font-size:15px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+main{max-width:1100px;margin:0 auto;padding:18px;display:grid;gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--mut);display:inline-block}.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kv div{padding:8px 10px;border:1px solid var(--line);border-radius:8px}.kv b{display:block;font-size:12px;color:var(--mut);font-weight:500}
+.lamps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.lamp{border:1px solid var(--line);border-radius:10px;padding:14px}.lamp h3{margin:0 0 2px;font-size:16px}.lamp small{color:var(--mut)}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line)}.row:last-child{border:0}.row span:first-child{color:var(--mut)}
+.pill{padding:2px 9px;border-radius:999px;font-size:13px;background:var(--line)}.on{background:#ffd54a;color:#222}.mv{background:var(--acc);color:#fff}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+input[type=file]{max-width:100%}button{padding:8px 16px;border:0;border-radius:8px;background:var(--acc);color:#fff;font:inherit;cursor:pointer}button:disabled{opacity:.5}
+.lang{background:transparent;color:var(--fg);border:1px solid var(--line);padding:4px 10px}.lang b{color:var(--acc)}
+progress{width:100%;height:10px;margin-top:10px}.hint{color:var(--mut);font-size:13px}a{color:var(--acc)}.tabs{display:flex;gap:4px}.tabs a{padding:6px 12px;border-radius:8px;text-decoration:none;color:var(--fg)}.tabs a.act{background:var(--acc);color:#fff}
+</style></head><body>
+<header><span id="dot" class="dot"></span><h1 data-t="title"></h1><span id="state" class="hint"></span><nav class="tabs"><a href="/" class="act" data-t="tabDash"></a><a href="/steinel/avance" data-t="tabAdv"></a></nav><button id="lang" class="lang" title="Langue / Language"></button></header>
+<main>
+<section class="card"><h2 data-t="mesh"></h2><div class="kv">
+<div><b data-t="network"></b><span id="net">—</span></div><div><b data-t="meshState"></b><span id="ready">—</span></div>
+<div><b data-t="gwAddr"></b><span id="local">—</span></div><div><b>IV Index</b><span id="iv">—</span></div>
+<div><b data-t="count"></b><span id="count">—</span></div><div><b data-t="gwFw"></b><span id="ver">—</span></div>
+<div><b data-t="uptime"></b><span id="up">—</span></div><div><b data-t="heap"></b><span id="heap">—</span></div>
+</div></section>
+<section class="card"><h2 data-t="lamps"></h2><div id="lamps" class="lamps"></div></section>
+<section class="card"><h2 data-t="fwTitle"></h2>
+<p class="hint" data-t="fwHint"></p>
+<input id="file" type="file" accept=".bin"> <button id="send" data-t="install"></button>
+<progress id="prog" max="100" value="0" hidden></progress><p id="ota" class="hint"></p></section>
+</main>
+<script>
+const T={fr:{title:'Passerelle Steinel Mesh',tabDash:'Tableau de bord',tabAdv:'Avancé',mesh:'Réseau Mesh',network:'Réseau',meshState:'État du Mesh',gwAddr:'Adresse passerelle',count:'Lampes gérées',gwFw:'Firmware passerelle',uptime:'En service depuis',heap:'Mémoire libre',lamps:'Lampes',fwTitle:'Charger un nouveau firmware',
+fwHint:'Choisissez le fichier <b>firmware.ota.bin</b> (dossier <code>.esphome/build/gl-s10-steinel/build/</code>). N\'utilisez jamais un fichier <i>factory</i> ni le firmware d\'origine pour ESP32-C3.',install:'Installer',
+connecting:'Connexion…',ready:'Mesh prêt',starting:'Mesh en démarrage',readyShort:'Prêt',waiting:'En attente',unreachable:'Passerelle injoignable',primary:'Lampe principale',address:'adresse',firmware:'firmware',
+mode:'Mode',light:'Lumière',intensity:'Intensité',motion:'Mouvement',lux:'Luminosité',threshold:'Seuil',signal:'Signal',on:'Allumée',off:'Éteinte',detected:'Détecté',none:'Aucun',
+Auto:'Auto','Always On':'Toujours allumée','Always Off':'Toujours éteinte',d:'j',kb:'Ko',
+chooseFile:'Choisissez d\'abord un fichier .bin.',noFactory:'Fichier factory refusé : utilisez firmware.ota.bin.',confirm:'Installer {f} et redémarrer la passerelle ?',sending:'Envoi… {p} %',
+rebooting:'Redémarrage de la passerelle…',done:'Firmware installé, passerelle redémarrée (version {v}).',noAnswer:'La passerelle ne répond pas encore : vérifiez-la.',failed:'Échec : ',interrupted:'Connexion interrompue pendant l\'envoi.'},
+en:{title:'Steinel Mesh Gateway',tabDash:'Dashboard',tabAdv:'Advanced',mesh:'Mesh network',network:'Network',meshState:'Mesh state',gwAddr:'Gateway address',count:'Managed lamps',gwFw:'Gateway firmware',uptime:'Uptime',heap:'Free memory',lamps:'Lamps',fwTitle:'Upload new firmware',
+fwHint:'Select the <b>firmware.ota.bin</b> file (folder <code>.esphome/build/gl-s10-steinel/build/</code>). Never use a <i>factory</i> image or the original ESP32-C3 firmware.',install:'Install',
+connecting:'Connecting…',ready:'Mesh ready',starting:'Mesh starting',readyShort:'Ready',waiting:'Waiting',unreachable:'Gateway unreachable',primary:'Primary lamp',address:'address',firmware:'firmware',
+mode:'Mode',light:'Light',intensity:'Intensity',motion:'Motion',lux:'Illuminance',threshold:'Threshold',signal:'Signal',on:'On',off:'Off',detected:'Detected',none:'None',
+Auto:'Auto','Always On':'Always on','Always Off':'Always off',d:'d',kb:'KB',
+chooseFile:'Select a .bin file first.',noFactory:'Factory image rejected: use firmware.ota.bin.',confirm:'Install {f} and restart the gateway?',sending:'Uploading… {p} %',
+rebooting:'Gateway restarting…',done:'Firmware installed, gateway restarted (version {v}).',noAnswer:'The gateway is not answering yet: please check it.',failed:'Failed: ',interrupted:'Connection lost during upload.'}};
+const $=s=>document.querySelector(s);let busy=false,last=null;
+let lang=(()=>{try{const s=localStorage.getItem('lang');if(s==='fr'||s==='en')return s}catch(e){}return(navigator.language||'fr').toLowerCase().startsWith('fr')?'fr':'en'})();
+const t=(k,v)=>{let s=T[lang][k]??k;if(v)for(const n in v)s=s.replace('{'+n+'}',v[n]);return s};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=(v,d,u)=>v==null?'—':Number(v).toFixed(d)+u;
+const dur=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+' '+t('d')+' ':'')+h+' h '+m+' min'};
+function applyLang(){document.documentElement.lang=lang;document.title=t('title');document.querySelectorAll('[data-t]').forEach(e=>e.innerHTML=t(e.dataset.t));
+$('#lang').innerHTML=lang==='fr'?'<b>FR</b> | EN':'FR | <b>EN</b>';if(last)render(last);else $('#state').textContent=t('connecting')}
+$('#lang').onclick=()=>{lang=lang==='fr'?'en':'fr';try{localStorage.setItem('lang',lang)}catch(e){}applyLang()};
+function lamp(l){const pct=l.intensity==null?0:Math.round(l.intensity);
+return `<div class="lamp"><h3>${esc(l.name)}</h3><small>${l.primary?t('primary')+' · ':''}${t('address')} 0x${esc(l.addr)}${l.fw?' · '+t('firmware')+' '+esc(l.fw):''}</small>
+<div class="row"><span>${t('mode')}</span><span>${l.mode?esc(t(l.mode)):'—'}</span></div>
+<div class="row"><span>${t('light')}</span><span class="pill ${l.light?'on':''}">${l.light==null?'—':l.light?t('on'):t('off')}</span></div>
+<div class="row"><span>${t('intensity')}</span><span>${l.intensity==null?'—':pct+' %'}</span></div><div class="bar"><i style="width:${pct}%"></i></div>
+<div class="row"><span>${t('motion')}</span><span class="pill ${l.motion?'mv':''}">${l.motion==null?'—':l.motion?t('detected'):t('none')}</span></div>
+<div class="row"><span>${t('lux')}</span><span>${num(l.lux,1,' lx')}</span></div>
+<div class="row"><span>${t('threshold')}</span><span>${num(l.threshold,0,' lx')}</span></div>
+<div class="row"><span>${t('signal')}</span><span>${num(l.rssi,0,' dBm')}</span></div></div>`}
+function render(j){$('#dot').className='dot '+(j.mesh_ready?'ok':'warn');$('#state').textContent=j.mesh_ready?t('ready'):t('starting');
+$('#net').textContent=j.network||'—';$('#ready').textContent=j.mesh_ready?t('readyShort'):t('waiting');$('#local').textContent='0x'+j.local;$('#iv').textContent=j.iv_index;
+$('#count').textContent=j.lamps.length;$('#ver').textContent=j.version;$('#up').textContent=dur(j.uptime);$('#heap').textContent=Math.round(j.heap/1024)+' '+t('kb');
+$('#lamps').innerHTML=j.lamps.map(lamp).join('')}
+async function load(){if(busy)return;try{const r=await fetch('/steinel/lamps',{cache:'no-store'});if(!r.ok)throw Error(r.status);last=await r.json();render(last)}catch(e){$('#dot').className='dot bad';$('#state').textContent=t('unreachable')}}
+function waitBack(){const t0=Date.now();const w=async()=>{try{const r=await fetch('/steinel/lamps',{cache:'no-store'});if(r.ok){last=await r.json();busy=false;$('#ota').textContent=t('done',{v:last.version});$('#send').disabled=false;render(last);return}}catch(e){}
+if(Date.now()-t0<120000){$('#ota').textContent=t('rebooting');setTimeout(w,2000)}else{busy=false;$('#send').disabled=false;$('#ota').textContent=t('noAnswer')}};setTimeout(w,4000)}
+$('#send').onclick=()=>{const f=$('#file').files[0];if(!f){$('#ota').textContent=t('chooseFile');return}
+if(/factory/i.test(f.name)){$('#ota').textContent=t('noFactory');return}
+if(!confirm(t('confirm',{f:f.name})))return;busy=true;$('#send').disabled=true;const p=$('#prog');p.hidden=false;p.value=0;
+const d=new FormData;d.append('update',f,f.name);const x=new XMLHttpRequest;x.open('POST','/update');
+x.upload.onprogress=e=>{if(e.lengthComputable){p.value=Math.round(e.loaded*100/e.total);$('#ota').textContent=t('sending',{p:p.value})}};
+x.onload=()=>{if(x.status>=200&&x.status<300&&!/fail/i.test(x.responseText)){p.value=100;waitBack()}else{busy=false;$('#send').disabled=false;$('#ota').textContent=t('failed')+(x.responseText||('HTTP '+x.status))}};
+x.onerror=()=>{if(p.value>=100)waitBack();else{busy=false;$('#send').disabled=false;$('#ota').textContent=t('interrupted')}};x.send(d)};
+applyLang();load();setInterval(load,2000);
+</script></body></html>

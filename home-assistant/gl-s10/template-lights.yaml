@@ -27,7 +27,8 @@ template:
         state: "{{ is_state('binary_sensor.steinel_13e8d4_applique_devant_lumiere', 'on') }}"
         # Brightness = live Intensity (0-100 %) converted to 0-255
         level: "{{ (states('number.reseau_steinel_applique_devant_intensite') | float(0) * 2.55) | round(0) }}"
-        # Turn on: memorised intensity first (no flash), then Always On
+        # Turn on: memorised intensity first (no flash), then Always On,
+        # then the intensity again 1.5 s later (the L 42 SC applies its default 100 % on OnOff Set)
         turn_on:
           - action: number.set_value
             target:
@@ -39,6 +40,13 @@ template:
               entity_id: select.steinel_13e8d4_applique_devant_mode
             data:
               option: Always On
+          - delay:
+              milliseconds: 1500
+          - action: number.set_value
+            target:
+              entity_id: number.reseau_steinel_applique_devant_intensite
+            data:
+              value: "{{ states('input_number.applique_devant_intensite_memorisee') | float(93) | round(0) }}"
         # Turn off: back to Auto, the detector takes over again
         turn_off:
           - action: select.select_option
@@ -46,7 +54,8 @@ template:
               entity_id: select.steinel_13e8d4_applique_devant_mode
             data:
               option: Auto
-        # Slider: 0 % = Auto ; otherwise intensity now + Always On + memorise + detector power
+        # Slider: 0 % = Auto ; otherwise intensity now + Always On (+ intensity again 1.5 s later)
+        # + memorise + detector power
         set_level:
           - choose:
               - conditions:
@@ -76,6 +85,13 @@ template:
                       entity_id: select.steinel_13e8d4_applique_devant_mode
                     data:
                       option: Always On
+                  - delay:
+                      milliseconds: 1500
+                  - action: number.set_value
+                    target:
+                      entity_id: number.reseau_steinel_applique_devant_intensite
+                    data:
+                      value: "{{ [1, (brightness | int(0) / 2.55) | round(0)] | max }}"
               - action: input_number.set_value
                 target:
                   entity_id: input_number.applique_devant_intensite_memorisee

@@ -1,6 +1,6 @@
 # Steinel Bluetooth Mesh Gateway — GL-S10 (Ethernet) multi-lamp fork
 
-🇫🇷 [Version française](README_FR.md) · 📜 [Original project README](README_UPSTREAM.md)
+🇫🇷 [Version française](README_FR.md) · 📜 [Original project](https://github.com/supczinskib/steinel-nightmatiq-esp32-c3-gateway#readme)
 
 This repository is a **fork of [supczinskib/steinel-nightmatiq-esp32-c3-gateway](https://github.com/supczinskib/steinel-nightmatiq-esp32-c3-gateway)**,
 an excellent ESPHome gateway that controls a Steinel **NightmatIQ Plus** over Bluetooth Mesh from an **ESP32-C3**.
@@ -69,6 +69,19 @@ Auto/On/Off modes of the primary lamp, OTA, safe mode…) is kept.
 ---
 
 ## 2. Hardware
+
+### Products used
+
+| Product | Role | Official page |
+|---|---|---|
+| STEINEL **L 42 SC** (portrait wall light, 180° infrared sensor, Bluetooth Mesh) | primary lamp | [steinel.de](https://www.steinel.de) (article 085261) |
+| STEINEL **L 810 SC** (up/down wall light, 160° iHF sensor, Bluetooth Mesh) | extra lamps | [steinel.de — L 810 SC](https://www.steinel.de/de/group/licht/aussenleuchten/wand-und-deckenleuchten/l-810-sc-065706.html) |
+| GL.iNet **GL-S10** (ESP32 BLE gateway, Ethernet, PoE) | gateway | [gl-inet.com — GL-S10](https://www.gl-inet.com/en-de/products/gl-s10) |
+
+### Photos of the installation
+
+Photos taken on the tested installation are in [`docs/photos/`](docs/photos/). Manufacturer product pictures are
+copyrighted: see the official pages above.
 
 ### GL.iNet GL-S10
 
@@ -218,7 +231,7 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 | Motion | binary sensor (motion) | `0x0042`, group `0xC001` | **instant** (+ 10 s hold) |
 | Motion level | sensor % (diagnostic) | `0x0042` | instant |
 | Illuminance | sensor lx | `0x004E`, group `0xC000` | ~10 s (lamp period) |
-| Threshold | number lx | LC `0x002B` | on change |
+| Threshold | number 1–40 lx (slider) | LC `0x002B` | on change |
 | Power | number % | LC `0x002E` | on change |
 | Standby light | number % | LC `0x0030` | on change |
 | Hold time | number s | LC `0x003C` | on change |
@@ -243,6 +256,8 @@ Open `http://<gateway-ip>` (login `admin` + your admin password). Both pages are
 | JSON | `/steinel/lamps`, `/steinel/status` | Machine-readable state. |
 
 - Firmware upload uses ESPHome's `ota: - platform: web_server` (`/update`), protected by the admin login.
+- Page sources: `esphome/components/nightmatiq_mesh/steinel_dashboard.html` and `steinel_advanced.html`. After editing
+  them, run `python3 scripts/generate_pages.py` to regenerate the embedded `.h` files.
 - The upstream **automatic update from GitHub is disabled**: it downloads the ESP32-C3 firmware, which is not
   compatible with the GL-S10.
 
@@ -252,7 +267,9 @@ Open `http://<gateway-ip>` (login `admin` + your admin password). Both pages are
 
 ### 7.1 Requirements
 
-The component requires **ESPHome ≥ 2026.7.3** (tested with 2026.7.3).
+Use the **latest ESPHome release** (tested with **2026.9.0**, minimum 2026.7.3). Keep the **same version** on your computer and in
+ESPHome Device Builder, so that both produce the same firmware (`esphome version`; Device Builder version in
+*Settings → Apps*).
 
 **macOS** (Homebrew):
 ```bash
@@ -260,7 +277,7 @@ brew install python@3.13 git
 python3.13 -m venv ~/esphome-steinel
 source ~/esphome-steinel/bin/activate
 pip install --upgrade pip wheel
-pip install "esphome==2026.7.3"
+pip install --upgrade esphome
 ```
 On an **Intel Mac**, `cbor2` may need to be built: `brew install rust`, then run `pip install` again.
 
@@ -270,7 +287,7 @@ sudo apt update && sudo apt install -y python3-venv python3-pip git
 python3 -m venv ~/esphome-steinel
 source ~/esphome-steinel/bin/activate
 pip install --upgrade pip wheel
-pip install "esphome==2026.7.3"
+pip install --upgrade esphome
 sudo usermod -aG dialout "$USER"   # serial port access (log out / in afterwards)
 ```
 
@@ -279,6 +296,9 @@ Get the code:
 git clone -b gl-s10-multilamp https://github.com/bouboun59/esphome-steinel-mesh-gl-s10.git
 cd esphome-steinel-mesh-gl-s10/esphome
 ```
+
+To update later: `source ~/esphome-steinel/bin/activate && pip install --upgrade esphome`.
+The virtual environment must be activated in every new terminal (`source ~/esphome-steinel/bin/activate`).
 
 ### 7.2 Secrets
 
@@ -347,6 +367,16 @@ Alternative without firmware change: a DHCP reservation on your router for the g
 - Pasting commands with `# comments` may fail in zsh: `echo 'setopt interactivecomments' >> ~/.zshrc`.
 - In a *heredoc* (`<<'EOF'`), the closing `EOF` must be at the very beginning of the line.
 - Passwords with special characters: `read -rs 'PW?Password: '` then use `"$PW"`.
+
+### 7.9 Helper scripts
+
+| Script | Use |
+|---|---|
+| `scripts/install_esphome.sh [version]` | install / update ESPHome in `~/esphome-steinel` (macOS, Linux); latest version by default |
+| `scripts/validate.sh` | before a commit: embedded web pages up to date, no private file tracked, local and Device Builder YAML valid |
+| `scripts/upload_ota.sh <ip> [--web]` | compile and install over the network (ESPHome OTA, or `--web` through the gateway web page) |
+| `scripts/flash_usb.sh <port>` | compile and flash over serial (first installation / recovery) |
+| `scripts/generate_pages.py [--check]` | regenerate the embedded web pages after editing their HTML sources |
 
 ---
 
@@ -463,13 +493,19 @@ or create them from *Settings → Devices & services → Helpers → Template �
 - state = *Light* binary sensor, brightness = *Intensity*.
 
 The intensity is sent **before** switching to *Always On*: a Generic OnOff Set restores the
-last lightness, so the lamp goes straight to the requested level without flashing.
+last lightness, so the lamp goes straight to the requested level without flashing. Some models
+(the L 42 SC here) still apply their default lightness (100 %) on that OnOff Set, so the intensity
+is sent **again 1.5 s later**.
 
 ### 10.2 Dashboard tab
 
 [`dashboard-view.yaml`](home-assistant/gl-s10/dashboard-view.yaml) — a *sections* view with, for
-each luminaire: the light tile with its brightness slider, motion, illuminance and the mode buttons.
+each luminaire: the light tile with its brightness slider, motion, illuminance, the **twilight
+threshold** slider and the mode buttons.
 Add it via *Dashboard → edit → + (new view) → ⋮ → Edit in YAML*.
+
+The threshold is limited to **1–40 lx** (`max_value: 40` in the YAML) so that the slider gives a fine
+adjustment in the dusk range; raise `max_value` if you need more.
 
 ### 10.3 Keeping the chosen brightness
 
@@ -521,6 +557,7 @@ Result: the brightness you choose is used for manual switching **and** by the de
 ## 13. Security
 
 - **Never commit** `secrets.yaml` or `steinel-backup.json` (network keys, device keys).
+- **Never publish firmware binaries** (`*.bin`) built with your configuration: they contain your OTA password and API key.
 - The gateway stores the Steinel network keys: keep it on a trusted / IoT VLAN.
 - Change the web admin password at first login; it is also the OTA password.
 - Enable **API encryption** (`api: encryption: key: !secret api_encryption_key`) — disabled in the
@@ -533,6 +570,8 @@ Result: the brightness you choose is used for manual switching **and** by the de
 - License: **GNU GPL v3.0**, inherited from the original project (see [`LICENSE`](LICENSE)).
   In accordance with GPL-3.0 §5, files modified in this fork are listed in this README (§4) and in the
   git history, with their modification dates.
+- Files specific to the original project were removed from this fork (ESP32-C3 configuration, GitHub Pages files,
+  upstream READMEs EN/DE/PL, upstream Home Assistant package and scripts); they remain available in the original repository.
 - Original project and Steinel protocol work: **[supczinskib/steinel-nightmatiq-esp32-c3-gateway](https://github.com/supczinskib/steinel-nightmatiq-esp32-c3-gateway)** — many thanks.
 - GL-S10 ESPHome configuration: [blakadder/bluetooth-proxies](https://github.com/blakadder/bluetooth-proxies) and
   [devices.esphome.io](https://devices.esphome.io/devices/gl-inet-gl-s10/).

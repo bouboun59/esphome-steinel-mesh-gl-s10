@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## GL-S10 multi-lamp fork — 2026-09
+
+- Target GL.iNet GL-S10 (ESP32, Ethernet IP101), no Wi-Fi.
+- Several Steinel Connect luminaires from one gateway (primary + extra lamps, 4 elements each; tested L 42 SC + 2 × L 810 SC).
+- Per lamp: mode, light, live intensity, motion, illuminance, threshold, power, standby light, hold time, firmware, signal.
+- Twilight threshold limited to 1–40 lx (fine adjustment); Home Assistant lights re-send the intensity 1.5 s after Always On.
+- Motion and illuminance pushed by the lamps (groups 0xC001 / 0xC000); values sent to Home Assistant only on change.
+- Bilingual FR/EN web interface (dashboard, advanced page, firmware upload); GitHub auto-update (ESP32-C3) disabled.
+- Status LEDs (network / Home Assistant, Bluetooth Mesh); Steinel vendor-message listener (0xFEFF).
+- ESPHome 2026.9 compatibility; ESPHome Device Builder configuration; Home Assistant examples.
+- Removed upstream-only files (ESP32-C3 configuration, GitHub Pages, upstream READMEs, HA package, scripts).
+
+## Upstream history (supczinskib/steinel-nightmatiq-esp32-c3-gateway)
+
 ## 1.1.1 — 2026-08-27
 
 - Wi-Fi credentials can now be changed from the local gateway administration page.

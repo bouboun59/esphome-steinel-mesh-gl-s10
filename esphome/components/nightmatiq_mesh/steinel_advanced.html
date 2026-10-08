@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Steinel Mesh</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#1d2330;--mut:#6b7280;--line:#e3e6ea;--acc:#0b72e7;--ok:#1f9d55;--warn:#d98b00;--bad:#d64545;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2027;--fg:#e8ebef;--mut:#9aa3ad;--line:#2b323b;--acc:#4ea1ff}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:18px;margin:0;flex:1 1 auto}h2{font-size:15px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+main{max-width:1100px;margin:0 auto;padding:18px;display:grid;gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--mut);display:inline-block}.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.kv div{padding:8px 10px;border:1px solid var(--line);border-radius:8px}.kv b{display:block;font-size:12px;color:var(--mut);font-weight:500}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--mut);font-weight:500}
+.scroll{overflow-x:auto}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}input,select{width:100%;max-width:420px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+button{padding:8px 16px;border:0;border-radius:8px;background:var(--acc);color:#fff;font:inherit;cursor:pointer;margin:10px 8px 0 0}button:disabled{opacity:.5}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}button.danger{background:var(--bad)}
+.lang{background:transparent;color:var(--fg);border:1px solid var(--line);padding:4px 10px;margin:0}.lang b{color:var(--acc)}
+.tabs{display:flex;gap:4px}.tabs a{padding:6px 12px;border-radius:8px;text-decoration:none;color:var(--fg)}.tabs a.act{background:var(--acc);color:#fff}
+.hint{color:var(--mut);font-size:13px}.msg{padding:10px 14px;border-radius:10px;background:var(--card);border:1px solid var(--line)}.warnbox{color:var(--warn)}
+.hidden{display:none}a{color:var(--acc)}
+</style></head><body>
+<header><span id="dot" class="dot"></span><h1 data-t="title"></h1><span id="state" class="hint"></span>
+<nav class="tabs"><a href="/" data-t="tabDash"></a><a href="/steinel/avance" class="act" data-t="tabAdv"></a></nav>
+<button id="lang" class="lang" title="Langue / Language"></button></header>
+<main>
+<div id="msg" class="msg hint">—</div>
+
+<section class="card"><h2 data-t="gateway"></h2><div class="kv">
+<div><b data-t="meshState"></b><span id="g_mesh">—</span></div><div><b data-t="runtime"></b><span id="g_runtime">—</span></div>
+<div><b data-t="fw"></b><span id="g_fw">—</span></div><div><b data-t="uptime"></b><span id="g_up">—</span></div>
+<div><b data-t="reset"></b><span id="g_reset">—</span></div><div><b data-t="heap"></b><span id="g_heap">—</span></div>
+<div><b data-t="adminPw"></b><span id="g_pw">—</span></div>
+</div></section>
+
+<section class="card"><h2 data-t="mesh"></h2><div class="kv">
+<div><b data-t="network"></b><span id="m_net">—</span></div><div><b data-t="primary"></b><span id="m_primary">—</span></div>
+<div><b data-t="gwAddr"></b><span id="m_local">—</span></div><div><b>IV Index</b><span id="m_iv">—</span></div>
+<div><b data-t="tx"></b><span id="m_tx">—</span></div><div><b data-t="txErr"></b><span id="m_txerr">—</span></div>
+<div><b data-t="rx"></b><span id="m_rx">—</span></div><div><b data-t="lastRssi"></b><span id="m_rssi">—</span></div>
+</div></section>
+
+<section class="card"><h2 data-t="lamps"></h2><div class="scroll"><table>
+<thead><tr><th data-t="colName"></th><th data-t="colRole"></th><th data-t="colAddr"></th><th data-t="colFw"></th><th data-t="colSignal"></th></tr></thead>
+<tbody id="lamps"></tbody></table></div><p class="hint" data-t="lampsHint"></p></section>
+
+<section class="card"><h2 data-t="steinel"></h2>
+<div id="installed" class="hidden"><p id="installedText"></p>
+<button id="enable" class="hidden" data-t="enable"></button><button id="disable" class="sec hidden" data-t="disable"></button><button id="remove" class="danger" data-t="remove"></button>
+<p class="hint" data-t="changeNet"></p></div>
+<div id="setup" class="hidden"><p class="hint" data-t="setupHint"></p>
+<label data-t="email"></label><input id="email" type="email" autocomplete="username">
+<label data-t="password"></label><input id="password" type="password" autocomplete="current-password">
+<br><button id="discover" data-t="discover"></button>
+<div id="installPanel" class="hidden"><label data-t="chooseNet"></label><select id="network"></select>
+<label data-t="primaryAddr"></label><input id="node" placeholder="000F" maxlength="6">
+<label>IV Index</label><input id="iv" type="number" min="0" value="0">
+<br><button id="install" data-t="install"></button></div></div></section>
+
+<section class="card"><h2 data-t="security"></h2><p id="pwInfo" class="hint"></p>
+<label data-t="newPw"></label><input id="newPw" type="password" autocomplete="new-password">
+<label data-t="confirmPw"></label><input id="confPw" type="password" autocomplete="new-password">
+<br><button id="savePw" data-t="savePw"></button><p class="hint" data-t="pwOta"></p></section>
+
+<section class="card"><h2 data-t="maint"></h2>
+<button id="refresh" class="sec" data-t="refresh"></button><button id="factory" class="danger" data-t="factory"></button>
+<p class="hint"><span data-t="fwWhere"></span> · <a href="/steinel/classique" data-t="classic"></a></p></section>
+</main>
+<script>
+const T={fr:{title:'Passerelle Steinel Mesh',tabDash:'Tableau de bord',tabAdv:'Avancé',gateway:'Passerelle',meshState:'État du Mesh',runtime:"Mode d'exécution",fw:'Firmware passerelle',uptime:'En service depuis',reset:'Dernier redémarrage',heap:'Mémoire libre / plus grand bloc',adminPw:'Mot de passe admin',
+mesh:'Réseau Mesh',network:'Réseau',primary:'Lampe principale',gwAddr:'Adresse passerelle',tx:'Messages envoyés (acceptés / tentés)',txErr:"Erreurs d'envoi",rx:'Messages reçus / délais dépassés',lastRssi:'Dernier signal reçu',
+lamps:'Lampes du réseau',colName:'Nom',colRole:'Rôle',colAddr:'Adresses Mesh',colFw:'Firmware',colSignal:'Signal',rolePrimary:'Principale',roleExtra:'Supplémentaire',
+lampsHint:"La lampe principale est choisie lors de l'installation du réseau Steinel ci-dessous. Les lampes supplémentaires sont déclarées dans le fichier YAML de la passerelle (add_lamp).",
+steinel:'Réseau Steinel',installedTpl:'Réseau <b>{n}</b> installé · lampe principale <b>{p}</b> (0x{a}).',enable:'Réactiver le Mesh',disable:'Suspendre le Mesh',remove:'Supprimer la configuration',
+changeNet:'Pour changer de réseau ou de lampe principale : supprimez la configuration puis réimportez le réseau.',setupHint:"Importez votre réseau depuis le compte Steinel Connect (utilisé une seule fois ; les clés restent dans la passerelle).",
+email:'E-mail Steinel Connect',password:'Mot de passe Steinel Connect',discover:'Rechercher mes réseaux',chooseNet:'Réseau',primaryAddr:'Adresse de la lampe principale (vide = automatique)',install:'Installer',
+security:'Sécurité',newPw:'Nouveau mot de passe admin',confirmPw:'Confirmation',savePw:'Changer le mot de passe',pwOta:'Ce mot de passe protège aussi les mises à jour : reportez-le dans ota_password (secrets.yaml).',
+pwFactory:"⚠ Le mot de passe d'usine est encore actif : changez-le. Identifiant : admin.",pwCustom:'Mot de passe personnalisé. Identifiant : admin.',pwRules:'8 à 63 caractères imprimables, sans espace.',pwMismatch:'Les mots de passe ne correspondent pas.',
+maint:'Maintenance',refresh:"Relire l'état",factory:'Réinitialisation usine',fwWhere:'Le chargement du firmware se fait depuis le tableau de bord',classic:"Page d'origine (NightmatIQ)",
+ready:'Prêt',sync:'Synchronisation',disabled:'Suspendu',notConf:'Non configuré',busy:'Opération cloud en cours',factoryPw:"usine",customPw:'personnalisé',pending:'en attente de validation',confirmed:'confirmé',synchro:'synchronisation',ago:'il y a {s} s',
+unreachable:'Passerelle injoignable',cEnable:'Réactiver le Mesh et redémarrer la passerelle ?',cDisable:'Suspendre le Mesh (configuration conservée) et redémarrer la passerelle ?',cRemove:'Supprimer la configuration Mesh enregistrée ?',
+cFactory:'La réinitialisation usine efface le mot de passe admin et toute la configuration Mesh. Continuer ?',typeReset:'Tapez RESET pour confirmer :',d:'j',kb:'Ko'},
+en:{title:'Steinel Mesh Gateway',tabDash:'Dashboard',tabAdv:'Advanced',gateway:'Gateway',meshState:'Mesh state',runtime:'Runtime mode',fw:'Gateway firmware',uptime:'Uptime',reset:'Last reset',heap:'Free memory / largest block',adminPw:'Admin password',
+mesh:'Mesh network',network:'Network',primary:'Primary lamp',gwAddr:'Gateway address',tx:'Messages sent (accepted / attempted)',txErr:'Send errors',rx:'Messages received / timeouts',lastRssi:'Last signal received',
+lamps:'Lamps on the network',colName:'Name',colRole:'Role',colAddr:'Mesh addresses',colFw:'Firmware',colSignal:'Signal',rolePrimary:'Primary',roleExtra:'Extra',
+lampsHint:'The primary lamp is selected when installing the Steinel network below. Extra lamps are declared in the gateway YAML file (add_lamp).',
+steinel:'Steinel network',installedTpl:'Network <b>{n}</b> installed · primary lamp <b>{p}</b> (0x{a}).',enable:'Resume Mesh',disable:'Suspend Mesh',remove:'Remove configuration',
+changeNet:'To change network or primary lamp: remove the configuration, then import the network again.',setupHint:'Import your network from your Steinel Connect account (used once; the keys stay in the gateway).',
+email:'Steinel Connect e-mail',password:'Steinel Connect password',discover:'Find my networks',chooseNet:'Network',primaryAddr:'Primary lamp address (empty = automatic)',install:'Install',
+security:'Security',newPw:'New admin password',confirmPw:'Confirmation',savePw:'Change password',pwOta:'This password also protects updates: copy it to ota_password (secrets.yaml).',
+pwFactory:'⚠ The factory password is still active: change it. Username: admin.',pwCustom:'Custom password. Username: admin.',pwRules:'8 to 63 printable characters, no spaces.',pwMismatch:'Passwords do not match.',
+maint:'Maintenance',refresh:'Read states again',factory:'Factory reset',fwWhere:'Firmware upload is on the dashboard',classic:'Original page (NightmatIQ)',
+ready:'Ready',sync:'Synchronizing',disabled:'Suspended',notConf:'Not configured',busy:'Cloud operation in progress',factoryPw:'factory',customPw:'custom',pending:'pending validation',confirmed:'confirmed',synchro:'synchronizing',ago:'{s} s ago',
+unreachable:'Gateway unreachable',cEnable:'Resume the Mesh and restart the gateway?',cDisable:'Suspend the Mesh (configuration kept) and restart the gateway?',cRemove:'Remove the saved Mesh configuration?',
+cFactory:'Factory reset erases the admin password and the whole Mesh configuration. Continue?',typeReset:'Type RESET to confirm:',d:'d',kb:'KB'}};
+const $=s=>document.querySelector(s);let st=null,lamps=null,netsKey='';
+let lang=(()=>{try{const s=localStorage.getItem('lang');if(s==='fr'||s==='en')return s}catch(e){}return(navigator.language||'fr').toLowerCase().startsWith('fr')?'fr':'en'})();
+const t=(k,v)=>{let s=T[lang][k]??k;if(v)for(const n in v)s=s.replace('{'+n+'}',v[n]);return s};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dur=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+' '+t('d')+' ':'')+h+' h '+m+' min'};
+const hex4=v=>(parseInt(v,16)||0).toString(16).toUpperCase().padStart(4,'0');
+function applyLang(){document.documentElement.lang=lang;document.title=t('title');document.querySelectorAll('[data-t]').forEach(e=>e.innerHTML=t(e.dataset.t));
+$('#lang').innerHTML=lang==='fr'?'<b>FR</b> | EN':'FR | <b>EN</b>';if(st)renderStatus(st);if(lamps)renderLamps(lamps)}
+$('#lang').onclick=()=>{lang=lang==='fr'?'en':'fr';try{localStorage.setItem('lang',lang)}catch(e){}applyLang()};
+function renderStatus(j){const mesh=!j.configured?t('notConf'):!j.enabled?t('disabled'):j.mesh_ready?t('ready'):t('sync');
+$('#dot').className='dot '+(j.mesh_ready||(!j.enabled&&j.configured)?'ok':j.configured?'warn':'bad');$('#state').textContent=j.busy?t('busy'):mesh;$('#msg').textContent=j.message||'—';
+$('#g_mesh').textContent=mesh;$('#g_runtime').textContent=j.runtime_mode||'—';$('#g_fw').textContent=(j.gateway_version||'—')+(j.firmware_pending_validation?' · '+t('pending'):'');
+$('#g_up').textContent=j.gateway_uptime_seconds!=null?dur(j.gateway_uptime_seconds):'—';$('#g_reset').textContent=j.gateway_reset_reason||'—';
+$('#g_heap').textContent=j.free_internal_heap!=null?Math.round(j.free_internal_heap/1024)+' / '+Math.round((j.largest_internal_block||0)/1024)+' '+t('kb'):'—';
+$('#g_pw').textContent=j.factory_password?t('factoryPw')+' ⚠':t('customPw');$('#pwInfo').textContent=j.factory_password?t('pwFactory'):t('pwCustom');$('#pwInfo').className='hint'+(j.factory_password?' warnbox':'');
+$('#m_net').textContent=j.network||'—';$('#m_primary').textContent=j.configured?(j.node+' (0x'+hex4(j.node_address)+')'):'—';$('#m_local').textContent=j.configured?'0x'+hex4(j.local_address):'—';
+$('#m_iv').textContent=j.configured?j.iv_index+' · '+(j.iv_index_confirmed?t('confirmed'):t('synchro')):'—';
+$('#m_tx').textContent=(j.mesh_tx_accepted??'—')+' / '+(j.mesh_tx_attempts??'—');$('#m_txerr').textContent=(j.mesh_tx_errors??'—')+(j.mesh_last_tx_error?' (#'+j.mesh_last_tx_error+')':'');
+$('#m_rx').textContent=(j.mesh_rx_messages??'—')+' / '+(j.mesh_timeouts??'—');$('#m_rssi').textContent=j.mesh_rssi_received?j.mesh_last_rssi_dbm+' dBm · '+t('ago',{s:j.mesh_last_rssi_age_seconds||0}):'—';
+$('#installed').classList.toggle('hidden',!j.configured);$('#setup').classList.toggle('hidden',j.configured);
+if(j.configured){$('#installedText').innerHTML=t('installedTpl',{n:esc(j.network),p:esc(j.node),a:hex4(j.node_address)});$('#enable').classList.toggle('hidden',j.enabled);$('#disable').classList.toggle('hidden',!j.enabled)}
+const nets=JSON.stringify(j.networks||[]);if(nets!==netsKey){netsKey=nets;$('#network').replaceChildren(...(j.networks||[]).map(n=>new Option(n.name+' · '+n.nodes+' · '+(n.last_update||''),n.id)))}
+$('#installPanel').classList.toggle('hidden',j.configured||!(j.networks||[]).length);
+['#discover','#install','#enable','#disable','#remove','#factory','#refresh'].forEach(s=>$(s).disabled=!!j.busy)}
+function renderLamps(j){$('#lamps').innerHTML=j.lamps.map(l=>{const b=parseInt(l.addr,16);return `<tr><td>${esc(l.name)}</td><td>${l.primary?t('rolePrimary'):t('roleExtra')}</td><td>0x${hex4(l.addr)} – 0x${hex4((b+3).toString(16))}</td><td>${esc(l.fw||'—')}</td><td>${l.rssi==null?'—':Math.round(l.rssi)+' dBm'}</td></tr>`}).join('')}
+async function poll(){try{const r=await fetch('/steinel/status',{cache:'no-store'});const j=await r.json();if(!r.ok)throw Error(j.message||r.status);st=j;renderStatus(j)}catch(e){$('#dot').className='dot bad';$('#state').textContent=t('unreachable')}
+try{const r=await fetch('/steinel/lamps',{cache:'no-store'});if(r.ok){lamps=await r.json();renderLamps(lamps)}}catch(e){}}
+async function post(url,p){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p||new URLSearchParams});let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw Error(j.message||('HTTP '+r.status));return j}
+async function act(fn){try{const j=await fn();if(j&&j.message)$('#msg').textContent=j.message;poll()}catch(e){$('#msg').textContent=e.message;$('#dot').className='dot bad'}}
+const creds=()=>{const p=new URLSearchParams;p.set('email',$('#email').value);p.set('password',$('#password').value);return p};
+$('#discover').onclick=()=>act(()=>post('/steinel/discover',creds()));
+$('#install').onclick=()=>act(()=>{const p=creds();p.set('network_id',$('#network').value);p.set('node_address',$('#node').value.trim());p.set('iv_index',$('#iv').value||'0');return post('/steinel/install',p)});
+$('#enable').onclick=()=>{if(confirm(t('cEnable')))act(()=>post('/steinel/enable'))};
+$('#disable').onclick=()=>{if(confirm(t('cDisable')))act(()=>post('/steinel/disable'))};
+$('#remove').onclick=()=>{if(confirm(t('cRemove')))act(()=>post('/steinel/remove'))};
+$('#refresh').onclick=()=>act(()=>post('/steinel/refresh'));
+$('#factory').onclick=()=>{if(!confirm(t('cFactory')))return;if(prompt(t('typeReset'))!=='RESET')return;act(()=>post('/steinel/factory-reset'))};
+$('#savePw').onclick=()=>{const a=$('#newPw').value,b=$('#confPw').value;if(a.length<8||a.length>63||!/^[\x21-\x7E]+$/.test(a)){$('#pwInfo').textContent=t('pwRules');return}
+if(a!==b){$('#pwInfo').textContent=t('pwMismatch');return}act(async()=>{const p=new URLSearchParams;p.set('password',a);p.set('confirmation',b);const j=await post('/steinel/password',p);$('#newPw').value='';$('#confPw').value='';setTimeout(()=>location.reload(),7000);return j})};
+applyLang();poll();setInterval(poll,3000);
+</script></body></html>
