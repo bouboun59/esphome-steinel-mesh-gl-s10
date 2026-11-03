@@ -1246,6 +1246,7 @@ void NightmatiqMesh::provisioning_callback(esp_ble_mesh_prov_cb_event_t event,
       if (!self->restore_target_node_())
         return;
       self->restore_extra_nodes_();
+      self->apply_extra_device_keys_();
       const uint8_t *existing_app_key =
           esp_ble_mesh_provisioner_get_local_app_key(self->config_.net_key_index, self->config_.app_key_index);
       const esp_err_t result = existing_app_key == nullptr
@@ -1307,6 +1308,13 @@ void NightmatiqMesh::config_callback(esp_ble_mesh_cfg_client_cb_event_t event,
   NightmatiqMesh *self = NightmatiqMesh::instance_;
   if (self == nullptr || param == nullptr)
     return;
+
+  if (param->params != nullptr &&
+      (param->params->opcode == ESP_BLE_MESH_MODEL_OP_RELAY_GET ||
+       param->params->opcode == ESP_BLE_MESH_MODEL_OP_RELAY_SET)) {
+    self->handle_relay_status_(event, param);
+    return;
+  }
 
   // Retain the exact completion reason in the lightweight HTTP diagnostics.
   // This avoids attaching an API log client on RAM-constrained ESP32 builds.
@@ -1524,6 +1532,8 @@ bool NightmatiqMesh::restore_extra_nodes_() {
     node.net_idx = this->config_.net_key_index;
     node.flags = 0;
     node.iv_index = this->config_.iv_index;
+    if (lamp.dev_key_valid)
+      std::memcpy(node.dev_key, lamp.dev_key.data(), sizeof(node.dev_key));
     std::memcpy(node.dev_uuid, this->config_.mesh_uuid.data(), sizeof(node.dev_uuid));
     node.dev_uuid[14] ^= static_cast<uint8_t>(lamp.base >> 8);
     node.dev_uuid[15] ^= static_cast<uint8_t>(lamp.base & 0xFF);
@@ -1538,6 +1548,253 @@ bool NightmatiqMesh::restore_extra_nodes_() {
     }
   }
   return ok;
+}
+
+// ===================== Relais Bluetooth Mesh =====================
+// Config Relay Get/Set (Mesh Profile 4.3.2.x). Messages de configuration,
+// donc chiffres avec la DeviceKey du noeud cible (jamais avec l'AppKey).
+static constexpr uint32_t RELAY_FIRST_DELAY_MS = 30000;
+static constexpr uint32_t RELAY_STEP_MS = 3000;
+static constexpr uint32_t RELAY_REFRESH_MS = 3600000;
+static constexpr int32_t RELAY_MESSAGE_TIMEOUT_MS = 4000;
+static constexpr uint32_t RELAY_WATCHDOG_MS = 9000;
+
+void NightmatiqMesh::set_lamp_device_key(uint16_t base, const std::string &hex) {
+  ExtraLamp *lamp = nullptr;
+  for (size_t i = 0; i < this->extra_count_; i++)
+    if (this->extra_[i].base == base)
+      lamp = &this->extra_[i];
+  if (lamp == nullptr) {
+    ESP_LOGW(TAG, "DeviceKey ignoree : lampe 0x%04X inconnue (appeler add_lamp avant)", base);
+    return;
+  }
+  const auto nibble = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  std::array<uint8_t, 16> key{};
+  if (hex.size() != 32) {
+    ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : 32 caracteres hexa attendus (%u recus)", base,
+             static_cast<unsigned>(hex.size()));
+    return;
+  }
+  for (size_t i = 0; i < key.size(); i++) {
+    const int hi = nibble(hex[2 * i]);
+    const int lo = nibble(hex[2 * i + 1]);
+    if (hi < 0 || lo < 0) {
+      ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : caractere non hexadecimal", base);
+      return;
+    }
+    key[i] = static_cast<uint8_t>((hi << 4) | lo);
+  }
+  if (std::all_of(key.begin(), key.end(), [](uint8_t v) { return v == 0; })) {
+    ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : cle nulle ignoree", base);
+    return;
+  }
+  lamp->dev_key = key;
+  lamp->dev_key_valid = true;
+  // La cle elle-meme n'est jamais journalisee.
+  ESP_LOGI(TAG, "Lampe 0x%04X : DeviceKey configuree", base);
+}
+
+void NightmatiqMesh::apply_extra_device_keys_() {
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    const ExtraLamp &lamp = this->extra_[i];
+    if (!lamp.dev_key_valid || lamp.base == this->config_.onoff_address)
+      continue;
+    esp_ble_mesh_node_t *node = esp_ble_mesh_provisioner_get_node_with_addr(lamp.base);
+    if (node == nullptr)
+      continue;
+    std::memcpy(node->dev_key, lamp.dev_key.data(), sizeof(node->dev_key));
+  }
+}
+
+bool NightmatiqMesh::relay_target_ready_(uint16_t address) const {
+  if (address == this->config_.onoff_address)
+    return this->device_key_valid_;
+  const ExtraLamp *lamp = this->find_extra_base_(address);
+  return lamp != nullptr && lamp->dev_key_valid;
+}
+
+bool NightmatiqMesh::send_relay_get_(uint16_t address) {
+  if (!this->mesh_ready_.load() || config_client.model == nullptr)
+    return false;
+  config_client.model->keys[0] = ESP_BLE_MESH_KEY_DEV;
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_cfg_client_get_state_t get{};
+  common.opcode = ESP_BLE_MESH_MODEL_OP_RELAY_GET;
+  common.model = config_client.model;
+  common.ctx.net_idx = this->config_.net_key_index;
+  common.ctx.app_idx = ESP_BLE_MESH_KEY_DEV;
+  common.ctx.addr = address;
+  common.ctx.send_ttl = MESSAGE_TTL;
+  common.msg_timeout = RELAY_MESSAGE_TIMEOUT_MS;
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 2, 0)
+  common.msg_role = ROLE_PROVISIONER;
+#endif
+  return this->record_send_result_(esp_ble_mesh_config_client_get_state(&common, &get));
+}
+
+bool NightmatiqMesh::send_relay_set_(uint16_t address, bool enabled) {
+  if (!this->mesh_ready_.load() || config_client.model == nullptr)
+    return false;
+  config_client.model->keys[0] = ESP_BLE_MESH_KEY_DEV;
+  esp_ble_mesh_client_common_param_t common{};
+  esp_ble_mesh_cfg_client_set_state_t set{};
+  common.opcode = ESP_BLE_MESH_MODEL_OP_RELAY_SET;
+  common.model = config_client.model;
+  common.ctx.net_idx = this->config_.net_key_index;
+  common.ctx.app_idx = ESP_BLE_MESH_KEY_DEV;
+  common.ctx.addr = address;
+  common.ctx.send_ttl = MESSAGE_TTL;
+  common.msg_timeout = RELAY_MESSAGE_TIMEOUT_MS;
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 2, 0)
+  common.msg_role = ROLE_PROVISIONER;
+#endif
+  set.relay_set.relay = enabled ? ESP_BLE_MESH_RELAY_ENABLED : ESP_BLE_MESH_RELAY_DISABLED;
+  // 3 emissions par message relaye, espacees de 20 ms (valeur usuelle des noeuds SIG).
+  set.relay_set.relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20);
+  return this->record_send_result_(esp_ble_mesh_config_client_set_state(&common, &set));
+}
+
+void NightmatiqMesh::handle_relay_status_(esp_ble_mesh_cfg_client_cb_event_t event,
+                                          esp_ble_mesh_cfg_client_cb_param_t *param) {
+  const uint16_t address = param->params->ctx.addr;
+  this->relay_in_flight_.store(false);
+  if (event == ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT) {
+    this->mesh_timeouts_.fetch_add(1);
+    ESP_LOGW(TAG, "Lampe 0x%04X : pas de reponse a la requete relais", address);
+    return;
+  }
+  if (param->error_code != 0) {
+    ESP_LOGW(TAG, "Lampe 0x%04X : requete relais en echec (%d)", address, param->error_code);
+    return;
+  }
+  if (event != ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT && event != ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT &&
+      event != ESP_BLE_MESH_CFG_CLIENT_PUBLISH_EVT)
+    return;
+  const auto &status = param->status_cb.relay_status;
+  const int relay = status.relay;
+  const int count = status.retransmit & 0x07;
+  const int interval = ((status.retransmit >> 3) + 1) * 10;
+  if (address == this->config_.onoff_address) {
+    this->primary_relay_.store(relay);
+    this->primary_relay_rt_count_.store(count);
+    this->primary_relay_rt_interval_.store(interval);
+  } else if (ExtraLamp *lamp = this->find_extra_(address)) {
+    lamp->relay.store(relay);
+    lamp->relay_rt_count.store(count);
+    lamp->relay_rt_interval.store(interval);
+  } else {
+    return;
+  }
+  this->mesh_rx_messages_.fetch_add(1);
+  static const char *const NAMES[] = {"desactive", "active", "non supporte"};
+  ESP_LOGI(TAG, "Lampe 0x%04X : relais %s (retransmission %d x %d ms)", address,
+           relay >= 0 && relay <= 2 ? NAMES[relay] : "?", count, interval);
+}
+
+void NightmatiqMesh::advance_relay_(uint32_t now) {
+  if (!this->mesh_ready_.load() || config_client.model == nullptr)
+    return;
+  if (this->relay_in_flight_.load()) {
+    if (static_cast<int32_t>(now - this->relay_deadline_.load()) < 0)
+      return;
+    this->relay_in_flight_.store(false);  // filet de securite si aucun callback
+  }
+  if (this->composition_query_in_flight_.load())
+    return;
+
+  const auto mark_sent = [this, now](uint16_t address) {
+    this->relay_in_flight_addr_.store(address);
+    this->relay_deadline_.store(now + RELAY_WATCHDOG_MS);
+    this->relay_in_flight_.store(true);
+  };
+
+  // 1. Demandes de l'utilisateur (prioritaires sur la lecture periodique)
+  const int8_t primary_request = this->primary_relay_request_.load();
+  if (primary_request >= 0 && this->relay_target_ready_(this->config_.onoff_address)) {
+    if (this->send_relay_set_(this->config_.onoff_address, primary_request == 1)) {
+      this->primary_relay_request_.store(-1);
+      mark_sent(this->config_.onoff_address);
+    }
+    return;
+  }
+  for (size_t i = 0; i < this->extra_count_; i++) {
+    ExtraLamp &lamp = this->extra_[i];
+    const int8_t request = lamp.relay_request.load();
+    if (request < 0 || !lamp.dev_key_valid)
+      continue;
+    if (this->send_relay_set_(lamp.base, request == 1)) {
+      lamp.relay_request.store(-1);
+      mark_sent(lamp.base);
+    }
+    return;
+  }
+
+  // 2. Lecture periodique de l'etat relais de chaque lampe
+  if (this->relay_next_at_ == 0)
+    this->relay_next_at_ = now + RELAY_FIRST_DELAY_MS;
+  if (static_cast<int32_t>(now - this->relay_next_at_) < 0)
+    return;
+  const size_t total = 1 + this->extra_count_;
+  while (this->relay_index_ < total) {
+    const size_t index = this->relay_index_++;
+    const uint16_t address = index == 0 ? this->config_.onoff_address : this->extra_[index - 1].base;
+    if (address == 0 || !this->relay_target_ready_(address))
+      continue;
+    if (this->send_relay_get_(address))
+      mark_sent(address);
+    this->relay_next_at_ = now + RELAY_STEP_MS;
+    return;
+  }
+  this->relay_index_ = 0;
+  this->relay_next_at_ = now + RELAY_REFRESH_MS;
+}
+
+void NightmatiqMesh::request_relay_refresh() {
+  this->relay_index_ = 0;
+  this->relay_next_at_ = millis();
+}
+
+void NightmatiqMesh::set_lamp_relay(uint16_t base, bool enabled) {
+  if (base == this->config_.onoff_address) {
+    if (!this->device_key_valid_)
+      ESP_LOGW(TAG, "Relais lampe principale : DeviceKey absente, reimporter le backup");
+    this->primary_relay_request_.store(enabled ? 1 : 0);
+    return;
+  }
+  ExtraLamp *lamp = this->find_extra_(base);
+  if (lamp == nullptr || lamp->base != base) {
+    ESP_LOGW(TAG, "Relais : lampe 0x%04X inconnue", base);
+    return;
+  }
+  if (!lamp->dev_key_valid)
+    ESP_LOGW(TAG, "Relais lampe 0x%04X : DeviceKey absente (set_lamp_device_key)", base);
+  lamp->relay_request.store(enabled ? 1 : 0);
+}
+
+int NightmatiqMesh::lamp_relay(uint16_t base) const {
+  if (base == this->config_.onoff_address)
+    return this->primary_relay_.load();
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->relay.load();
+}
+
+int NightmatiqMesh::lamp_relay_retransmit_count(uint16_t base) const {
+  if (base == this->config_.onoff_address)
+    return this->primary_relay_rt_count_.load();
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->relay_rt_count.load();
+}
+
+int NightmatiqMesh::lamp_relay_retransmit_interval(uint16_t base) const {
+  if (base == this->config_.onoff_address)
+    return this->primary_relay_rt_interval_.load();
+  const ExtraLamp *lamp = this->find_extra_base_(base);
+  return lamp == nullptr ? -1 : lamp->relay_rt_interval.load();
 }
 
 bool NightmatiqMesh::send_lc_mode_set_to_(uint16_t destination, bool enabled) {
@@ -3035,6 +3292,8 @@ void NightmatiqMesh::loop() {
     this->advance_control_(now);
     return;
   }
+
+  this->advance_relay_(now);
 
   if (this->access_operation_.load() != AccessOperation::NONE)
     return;

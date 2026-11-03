@@ -102,6 +102,17 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   // Intensite en direct (Light Lightness, element 0)
   void set_lamp_lightness(uint16_t base, float percent);
   float lamp_lightness(uint16_t base) const;
+  // Relais Bluetooth Mesh (Config Relay Get/Set, chiffre avec la DeviceKey du noeud).
+  // base = adresse unicast de la lampe (0x000F pour la lampe principale).
+  // DeviceKey d'une lampe supplementaire : 32 caracteres hexa, issue du backup Steinel.
+  void set_lamp_device_key(uint16_t base, const std::string &hex);
+  // -1 inconnu, 0 desactive, 1 active, 2 non supporte par la lampe
+  int lamp_relay(uint16_t base) const;
+  // Retransmissions relais (count, interval_ms), -1 si inconnu
+  int lamp_relay_retransmit_count(uint16_t base) const;
+  int lamp_relay_retransmit_interval(uint16_t base) const;
+  void set_lamp_relay(uint16_t base, bool enabled);
+  void request_relay_refresh();
   int motion_raw() const { return this->motion_raw_.load(); }
   bool mesh_mode_enabled() const { return this->mesh_mode_enabled_; }
 
@@ -413,6 +424,12 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
     std::atomic<uint8_t> fw_minor{0};
     std::atomic<uint8_t> fw_patch{0};
     std::atomic<uint8_t> hw{0};
+    std::array<uint8_t, 16> dev_key{};
+    bool dev_key_valid{false};
+    std::atomic<int> relay{-1};
+    std::atomic<int> relay_rt_count{-1};
+    std::atomic<int> relay_rt_interval{-1};
+    std::atomic<int8_t> relay_request{-1};
   };
   static constexpr size_t MAX_EXTRA_LAMPS = 4;
   static constexpr size_t MAX_GROUPS = 4;
@@ -428,6 +445,23 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   bool send_extra_get_(const ExtraLamp &lamp, uint8_t kind);
   bool send_lc_threshold_set_to_(ExtraLamp &lamp, uint32_t centilux);
   bool all_extra_identities_found_() const;
+  // Relais
+  void apply_extra_device_keys_();
+  bool relay_target_ready_(uint16_t address) const;
+  bool send_relay_get_(uint16_t address);
+  bool send_relay_set_(uint16_t address, bool enabled);
+  void advance_relay_(uint32_t now);
+  void handle_relay_status_(esp_ble_mesh_cfg_client_cb_event_t event,
+                            esp_ble_mesh_cfg_client_cb_param_t *param);
+  std::atomic<int> primary_relay_{-1};
+  std::atomic<int> primary_relay_rt_count_{-1};
+  std::atomic<int> primary_relay_rt_interval_{-1};
+  std::atomic<int8_t> primary_relay_request_{-1};
+  std::atomic<bool> relay_in_flight_{false};
+  std::atomic<uint32_t> relay_deadline_{0};
+  std::atomic<uint16_t> relay_in_flight_addr_{0};
+  uint32_t relay_next_at_{0};
+  size_t relay_index_{0};
   uint16_t primary_tag_{0};
   char auth_username_buf_[64]{};
   char auth_password_buf_[72]{};
