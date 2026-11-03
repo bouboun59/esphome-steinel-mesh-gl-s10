@@ -174,8 +174,8 @@ Tout ce qui suit a été lu dans la sauvegarde cloud Steinel (`/project/network/
 
 - La **lampe principale** est celle choisie dans l'interface web lors de l'import Steinel (adresse du nœud).
   Elle conserve toute la logique d'origine (transactions Auto/On/Off confirmées, seuil, identité…).
-- Les **lampes supplémentaires** sont déclarées dans le YAML (`on_boot`), avec leur adresse de base et leur
-  numéro de scène. Elles bénéficient d'une implémentation plus légère et indépendante :
+- Les **lampes supplémentaires** sont déclarées dans le YAML (liste `lamps:` de `nightmatiq_mesh`), avec leur
+  adresse de base et leur numéro de scène. Elles bénéficient d'une implémentation plus légère et indépendante :
   - les commandes (mode, seuil, réglages du détecteur, intensité) sont envoyées **deux fois, sans accusé de
     réception**, puis **relues** pour confirmation ;
   - leur état est **interrogé** à tour de rôle (allumée/éteinte, mode LC, luminosité, seuil) ;
@@ -407,7 +407,7 @@ Le composant est téléchargé depuis GitHub à chaque compilation : le seul fic
        components: [nightmatiq_mesh]
        refresh: 0s
    ```
-3. Adaptez la lambda `on_boot` (vos lampes) et, si besoin, l'adresse IP fixe (§7.7).
+3. Adaptez le bloc `nightmatiq_mesh:` (`primary:` et `lamps:`, §9) et, si besoin, l'adresse IP fixe (§7.7).
 4. Si Device Builder demande la carte, choisissez **DOIT ESP32 DEVKIT V1** (`esp32doit-devkit-v1`).
 5. **Install → Wirelessly** (la première compilation sur la machine Home Assistant prend 10 à 30 minutes et demande
    environ 2 Go de RAM).
@@ -447,27 +447,56 @@ jq '.. | objects | select(has("nodeAddress") and has("defaultSceneNumber"))' ste
 jq '.nodes[] | {name, pubs: [.elements[] | .models[] | select(.publish != null) | {modelId, to: .publish.address}]}' steinel-backup.json
 ```
 
-Adaptez ensuite la lambda `on_boot` de `gl-s10-steinel.yaml` :
+Déclarez ensuite vos lampes dans le bloc `nightmatiq_mesh:` de `gl-s10-steinel.yaml` — plus aucune lambda ni
+entité à écrire à la main :
 
 ```yaml
-esphome:
-  on_boot:
-    then:
-      - lambda: |-
-          id(nightmatiq_gateway).add_group(0xC001);          // groupe mouvement
-          id(nightmatiq_gateway).add_group(0xC000);          // groupe luminosité
-          id(nightmatiq_gateway).add_lamp(0x0013, 3);        // lampe supplémentaire : adresse de base, scène
-          id(nightmatiq_gateway).add_lamp(0x0017, 3);
-          id(nightmatiq_gateway).set_primary_tag(0x308A);    // suffixe du nom de la lampe principale
-          id(nightmatiq_gateway).set_lamp_tag(0x0013, 0xD58E);
-          id(nightmatiq_gateway).set_lamp_tag(0x0017, 0xA52C);
-          id(nightmatiq_gateway).add_lc_props(0x000F);       // réglages du détecteur (toutes les lampes)
-          id(nightmatiq_gateway).add_lc_props(0x0013);
-          id(nightmatiq_gateway).add_lc_props(0x0017);
+nightmatiq_mesh:
+  id: nightmatiq_gateway
+  ota_id: nightmatiq_ota
+  web_username: "${factory_username}"
+  web_password: !secret gl_s10_web_password
+  groups: [0xC001, 0xC000]               # groupe mouvement, groupe luminosité
+  primary:                               # lampe choisie à l'import du backup
+    address: 0x000F
+    name: "Applique Entrée"
+    tag: 0x308A                          # suffixe du nom Bluetooth de la lampe
+  lamps:                                 # jusqu'à 4 lampes supplémentaires
+    - address: 0x0013
+      name: "Applique Devant"
+      tag: 0xD58E
+      scene: 3                           # scène du mode Auto
+      product_id: 0x1E79                 # pid du nœud dans le backup (entité « Product ID »)
+      device_key: !secret steinel_devkey_devant   # nodes[].deviceKey : requis pour le relais Mesh
+    - address: 0x0017
+      name: "Applique Garage"
+      tag: 0xA52C
+      scene: 3
+      product_id: 0x1E79
+      device_key: !secret steinel_devkey_garage
 ```
 
-… puis dupliquez les entités modèles d'une lampe supplémentaire pour chaque nouvelle lampe (en changeant l'adresse).
-La lampe principale utilise les entités liées au composant.
+Le composant crée lui-même, pour chaque lampe, les entités « `<nom>` Lumière, Mouvement, Mouvement niveau, Signal,
+Luminosité, Révision matérielle, Intensité, Puissance, Lumière de base, Temporisation, Seuil, Mode, Firmware,
+Fabricant, Company ID, Product ID, Relais Mesh », plus « Gateway Mesh Ready / Status / Refresh » et
+« Relais Mesh Relire ». Les noms sont ceux de l'ancien YAML : les entity_id Home Assistant sont conservés.
+
+Chaque entité se surcharge (dictionnaire) ou se supprime (`false`) sous sa clé :
+
+```yaml
+    - address: 0x0013
+      name: "Applique Devant"
+      signal: {internal: true}            # masquée de Home Assistant
+      relay: false                        # pas d'interrupteur Relais Mesh
+      illuminance: {filters: [{delta: 1}]}
+```
+
+Clés disponibles : `light`, `motion`, `motion_level`, `hardware`, `signal`, `illuminance`, `intensity`, `power`,
+`base_light`, `run_on`, `threshold`, `mode`, `firmware`, `manufacturer_text`, `company_id_text`, `product_id_text`,
+`relay` ; pour la passerelle (`gateway:`) : `mesh_ready`, `status`, `refresh`, `relay_refresh`.
+`lc_props: false` sur une lampe supprime ses quatre réglages du détecteur.
+
+L'ancien mode (lambda `on_boot` + `lux_sensor_id`, `mode_select_id`… vers des entités template) reste accepté.
 
 Installation testée, pour référence :
 

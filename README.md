@@ -174,7 +174,7 @@ Everything below was read from the Steinel cloud backup (`/project/network/<id>/
 
 - The **primary lamp** is the one selected in the web UI during the Steinel import (node address).
   It keeps the complete upstream logic (confirmed Auto/On/Off transactions, threshold, identity…).
-- **Extra lamps** are declared in YAML (`on_boot`) with their base address and scene number.
+- **Extra lamps** are declared in YAML (`lamps:` list of `nightmatiq_mesh`) with their base address and scene number.
   They get a lighter, independent implementation:
   - commands (mode, threshold, detector settings, intensity) are sent **unacknowledged, twice**,
     then **read back** for confirmation;
@@ -405,7 +405,7 @@ The component is downloaded from GitHub at every build, so the only file in Home
        components: [nightmatiq_mesh]
        refresh: 0s
    ```
-3. Adapt the `on_boot` lambda (your lamps) and, if needed, the fixed IP (§7.7).
+3. Adapt the `nightmatiq_mesh:` block (`primary:` and `lamps:`, §9) and, if needed, the fixed IP (§7.7).
 4. If Device Builder asks for the board, choose **DOIT ESP32 DEVKIT V1** (`esp32doit-devkit-v1`).
 5. **Install → Wirelessly** (the first build on the Home Assistant host takes 10–30 minutes and needs ~2 GB RAM).
 6. With API encryption enabled, Home Assistant asks for the key once
@@ -444,35 +444,37 @@ jq '.. | objects | select(has("nodeAddress") and has("defaultSceneNumber"))' ste
 jq '.nodes[] | {name, pubs: [.elements[] | .models[] | select(.publish != null) | {modelId, to: .publish.address}]}' steinel-backup.json
 ```
 
-Then adapt the `on_boot` lambda of `gl-s10-steinel.yaml`:
+Then declare your lamps in the `nightmatiq_mesh:` block of `gl-s10-steinel.yaml` — no lambda and no hand-written
+entities any more:
 
 ```yaml
-esphome:
-  on_boot:
-    then:
-      - lambda: |-
-          id(nightmatiq_gateway).add_group(0xC001);          // motion group
-          id(nightmatiq_gateway).add_group(0xC000);          // illuminance group
-          id(nightmatiq_gateway).add_lamp(0x0013, 3);        // extra lamp: base address, scene
-          id(nightmatiq_gateway).add_lamp(0x0017, 3);
-          id(nightmatiq_gateway).set_primary_tag(0x308A);    // suffix of the primary lamp name
-          id(nightmatiq_gateway).set_lamp_tag(0x0013, 0xD58E);
-          id(nightmatiq_gateway).set_lamp_tag(0x0017, 0xA52C);
-          id(nightmatiq_gateway).add_lc_props(0x000F);       // detector settings (all lamps)
-          id(nightmatiq_gateway).add_lc_props(0x0013);
-          id(nightmatiq_gateway).add_lc_props(0x0017);
+nightmatiq_mesh:
+  id: nightmatiq_gateway
+  ota_id: nightmatiq_ota
+  web_username: "${factory_username}"
+  web_password: !secret gl_s10_web_password
+  groups: [0xC001, 0xC000]               # motion group, illuminance group
+  primary:                               # lamp selected when importing the backup
+    address: 0x000F
+    name: "Applique Entrée"
+    tag: 0x308A
+  lamps:                                 # up to 4 extra lamps
+    - address: 0x0013
+      name: "Applique Devant"
+      tag: 0xD58E
+      scene: 3
+      product_id: 0x1E79
+      device_key: !secret steinel_devkey_devant   # nodes[].deviceKey, required for the Mesh relay
 ```
 
-…and duplicate the template entities of one extra lamp for each additional lamp
-(replace the address). The primary lamp uses the component-bound entities.
-
-Tested installation, for reference:
-
-| Lamp | Model | Base address | Tag | Name in HA |
-|---|---|---|---|---|
-| primary | L42 SC | `0x000F` | `0x308A` | Applique Entrée |
-| extra | L 810 SC | `0x0013` | `0xD58E` | Applique Devant |
-| extra | L 810 SC | `0x0017` | `0xA52C` | Applique Garage |
+For every lamp the component creates the "`<name>` Lumière, Mouvement, Mouvement niveau, Signal, Luminosité,
+Révision matérielle, Intensité, Puissance, Lumière de base, Temporisation, Seuil, Mode, Firmware, Fabricant,
+Company ID, Product ID, Relais Mesh" entities, plus "Gateway Mesh Ready / Status / Refresh" and "Relais Mesh Relire".
+Names match the previous YAML, so Home Assistant entity_ids are kept. Override an entity with a dict under its key
+(`signal: {internal: true}`) or drop it with `false` (`relay: false`). Keys: `light`, `motion`, `motion_level`,
+`hardware`, `signal`, `illuminance`, `intensity`, `power`, `base_light`, `run_on`, `threshold`, `mode`, `firmware`,
+`manufacturer_text`, `company_id_text`, `product_id_text`, `relay`; gateway: `mesh_ready`, `status`, `refresh`,
+`relay_refresh`. The legacy `on_boot` lambda + `*_id` options still work.
 
 ---
 

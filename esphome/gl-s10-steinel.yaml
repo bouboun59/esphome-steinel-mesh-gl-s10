@@ -2,9 +2,9 @@ substitutions:
   name: gl-s10-steinel
   friendly_name: Steinel
   project_name: "envpl.steinel_nightmatiq_gateway"
-  project_version: "1.1.1-gls10"
+  project_version: "1.2.0-gls10"
   factory_username: "admin"
-  factory_password: "12345678"
+  factory_password: "12345678"  # a changer, ou !secret
 
 esphome:
   name: ${name}
@@ -15,22 +15,17 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
   on_boot:
-    then:
-      - output.turn_on: power_led
-      - lambda: |-
-          id(nightmatiq_gateway).add_group(0xC001);
-          id(nightmatiq_gateway).add_group(0xC000);  // INSTANT_V1 luminosite
-          id(nightmatiq_gateway).add_lamp(0x0013, 3);
-          id(nightmatiq_gateway).add_lamp(0x0017, 3);
-          id(nightmatiq_gateway).set_primary_tag(0x308A);
-          id(nightmatiq_gateway).add_lc_props(0x000F);
-          id(nightmatiq_gateway).add_lc_props(0x0013);
-          id(nightmatiq_gateway).add_lc_props(0x0017);
-          id(nightmatiq_gateway).set_lamp_tag(0x0013, 0xD58E);
-          id(nightmatiq_gateway).set_lamp_tag(0x0017, 0xA52C);
-          id(nightmatiq_gateway).set_primary_name("Applique Entrée");
-          id(nightmatiq_gateway).set_lamp_name(0x0013, "Applique Devant");
-          id(nightmatiq_gateway).set_lamp_name(0x0017, "Applique Garage");
+    - then:
+        - output.turn_on: power_led
+    # Puissance d'emission BLE a +9 dBm (ESP32 classique : +3 dBm par defaut).
+    - priority: -100
+      then:
+        - delay: 15s
+        - lambda: |-
+            const esp_err_t e1 = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
+            const esp_err_t e2 = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
+            const esp_err_t e3 = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
+            ESP_LOGI("ble_tx", "TX +9 dBm -> default=%d adv=%d scan=%d (0 = OK)", (int) e1, (int) e2, (int) e3);
 
 esp32:
   board: esp32doit-devkit-v1
@@ -129,23 +124,33 @@ external_components:
 
 nightmatiq_mesh:
   id: nightmatiq_gateway
-  extended_diagnostics: true
-  lux_sensor_id: nightmatiq_lux
-  rssi_sensor_id: nightmatiq_rssi
-  threshold_number_id: nightmatiq_threshold
-  mode_select_id: nightmatiq_mode
-  ready_binary_sensor_id: nightmatiq_mesh_ready
-  actual_output_binary_sensor_id: nightmatiq_actual_output
-  status_text_sensor_id: nightmatiq_status
-  firmware_version_text_sensor_id: nightmatiq_firmware_version
-  hardware_version_sensor_id: nightmatiq_hardware_version
-  manufacturer_text_sensor_id: nightmatiq_manufacturer
-  company_id_text_sensor_id: nightmatiq_company_id
-  product_id_text_sensor_id: nightmatiq_product_id
   ota_id: nightmatiq_ota
   web_username: "${factory_username}"
   web_password: "${factory_password}"
+  extended_diagnostics: true
   update_interval: 30s
+  groups: [0xC001, 0xC000]  # Maison, Sensor18 (luminosite INSTANT_V1)
+  # Lampe principale : celle choisie a l'import du backup Steinel.
+  # Chaque entite generee se surcharge (dict) ou se supprime (false), ex. :
+  #   signal: {internal: true}     relay: false
+  primary:
+    address: 0x000F
+    name: "Applique Entrée"
+    tag: 0x308A
+  lamps:
+    - address: 0x0013
+      name: "Applique Devant"
+      tag: 0xD58E
+      scene: 3
+      product_id: 0x1E79
+      # DeviceKey du noeud (backup Steinel, nodes[].deviceKey) : requise pour le relais Mesh
+      # device_key: !secret steinel_devkey_devant
+    - address: 0x0017
+      name: "Applique Garage"
+      tag: 0xA52C
+      scene: 3
+      product_id: 0x1E79
+      # device_key: !secret steinel_devkey_garage
 
 logger:
   level: DEBUG
@@ -154,6 +159,8 @@ logger:
 
 api:
   id: api_server
+  encryption:
+    key: !secret gl_s10_steinel__encryption_key
   reboot_timeout: 0s
   max_connections: 3
   listen_backlog: 1
@@ -177,7 +184,7 @@ web_server:
     username: "${factory_username}"
     password: "${factory_password}"
 
-
+# --- Materiel du boitier GL-S10 (LEDs, bouton)
 output:
   - platform: gpio
     pin: GPIO32
@@ -193,619 +200,15 @@ output:
     id: bluetooth_led
 
 binary_sensor:
-  - platform: template
-    name: "Applique Devant Lumière"
-    icon: mdi:lightbulb
-    lambda: |-
-      const int v = id(nightmatiq_gateway).lamp_output(0x0013);
-      if (v < 0) return {};
-      return v == 1;
-  - platform: template
-    name: "Applique Devant Mouvement"
-    device_class: motion
-    lambda: |-
-      const int v = id(nightmatiq_gateway).lamp_motion(0x0013);
-      if (v < 0 || v == 0xFF) return {};
-      return v > 0;
-    filters:
-      - delayed_off: 10s
-  - platform: template
-    name: "Applique Garage Lumière"
-    icon: mdi:lightbulb
-    lambda: |-
-      const int v = id(nightmatiq_gateway).lamp_output(0x0017);
-      if (v < 0) return {};
-      return v == 1;
-  - platform: template
-    name: "Applique Garage Mouvement"
-    device_class: motion
-    lambda: |-
-      const int v = id(nightmatiq_gateway).lamp_motion(0x0017);
-      if (v < 0 || v == 0xFF) return {};
-      return v > 0;
-    filters:
-      - delayed_off: 10s
-  - platform: template
-    id: steinel_motion
-    name: "Applique Entrée Mouvement"
-    device_class: motion
-    lambda: |-
-      const int v = id(nightmatiq_gateway).motion_raw();
-      if (v < 0 || v == 0xFF) return {};
-      return v > 0;
-    filters:
-      - delayed_off: 10s
   - platform: gpio
     pin:
       number: GPIO33
       inverted: true
     name: "Reset Button"
-  - platform: template
-    id: nightmatiq_mesh_ready
-    name: "Gateway Mesh Ready"
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_actual_output
-    name: "Applique Entrée Lumière"
-    icon: mdi:lightbulb
 
 button:
   - platform: safe_mode
     name: Safe Mode Boot
-    entity_category: diagnostic
-  - platform: template
-    name: "Gateway Refresh"
-    icon: mdi:refresh
-    entity_category: diagnostic
-    on_press:
-      - lambda: 'id(nightmatiq_gateway).request_refresh();'
-
-sensor:
-  - platform: template
-    name: "Applique Devant Mouvement niveau"
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static int last = -2;
-      const int v = id(nightmatiq_gateway).lamp_motion(0x0013);
-      if (v < 0 || v == 0xFF || v == last) return {};
-      last = v;
-      return v / 2.0f;
-    filters:
-      - delta: 0.4
-  - platform: template
-    name: "Applique Devant Révision matérielle"
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_hardware(0x0013);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-  - platform: template
-    name: "Applique Devant Signal"
-    device_class: signal_strength
-    state_class: measurement
-    unit_of_measurement: dBm
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_rssi(0x0013);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    filters:
-      - throttle_average: 60s
-      - delta: 2
-  - platform: template
-    name: "Applique Garage Mouvement niveau"
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static int last = -2;
-      const int v = id(nightmatiq_gateway).lamp_motion(0x0017);
-      if (v < 0 || v == 0xFF || v == last) return {};
-      last = v;
-      return v / 2.0f;
-    filters:
-      - delta: 0.4
-  - platform: template
-    name: "Applique Garage Révision matérielle"
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_hardware(0x0017);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-  - platform: template
-    name: "Applique Garage Signal"
-    device_class: signal_strength
-    state_class: measurement
-    unit_of_measurement: dBm
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_rssi(0x0017);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    filters:
-      - throttle_average: 60s
-      - delta: 2
-  - platform: template
-    name: "Applique Devant Luminosité"
-    device_class: illuminance
-    state_class: measurement
-    unit_of_measurement: lx
-    accuracy_decimals: 1
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lux(0x0013);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    filters:
-      - delta: 0.5
-  - platform: template
-    name: "Applique Garage Luminosité"
-    device_class: illuminance
-    state_class: measurement
-    unit_of_measurement: lx
-    accuracy_decimals: 1
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lux(0x0017);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    filters:
-      - delta: 0.5
-  - platform: template
-    id: steinel_motion_level
-    name: "Applique Entrée Mouvement niveau"
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static int last = -2;
-      const int v = id(nightmatiq_gateway).motion_raw();
-      if (v < 0 || v == 0xFF || v == last) return {};
-      last = v;
-      return v / 2.0f;
-    filters:
-      - delta: 0.4
-  - platform: template
-    id: nightmatiq_rssi
-    filters:
-      - throttle_average: 60s
-      - delta: 2
-    name: "Applique Entrée Signal"
-    device_class: signal_strength
-    state_class: measurement
-    unit_of_measurement: dBm
-    accuracy_decimals: 0
-    update_interval: never
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_hardware_version
-    name: "Applique Entrée Révision matérielle"
-    accuracy_decimals: 0
-    update_interval: never
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_lux
-    filters:
-      - delta: 0.5
-    name: "Applique Entrée Luminosité"
-    device_class: illuminance
-    state_class: measurement
-    unit_of_measurement: lx
-    accuracy_decimals: 2
-    update_interval: never
-
-number:
-  - platform: template
-    name: "Applique Entrée Intensité"
-    icon: mdi:brightness-6
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lightness(0x000F);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lightness(0x000F, x);'
-  - platform: template
-    name: "Applique Devant Intensité"
-    icon: mdi:brightness-6
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lightness(0x0013);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lightness(0x0013, x);'
-  - platform: template
-    name: "Applique Garage Intensité"
-    icon: mdi:brightness-6
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lightness(0x0017);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lightness(0x0017, x);'
-  - platform: template
-    name: "Applique Entrée Puissance"
-    icon: mdi:brightness-percent
-    unit_of_measurement: "%"
-    min_value: 1
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x000F, 0x002E);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x000F, 0x002E, x);'
-  - platform: template
-    name: "Applique Entrée Lumière de base"
-    icon: mdi:lightbulb-night-outline
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x000F, 0x0030);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x000F, 0x0030, x);'
-  - platform: template
-    name: "Applique Entrée Temporisation"
-    icon: mdi:timer-outline
-    unit_of_measurement: "s"
-    min_value: 1
-    max_value: 3600
-    step: 1
-    mode: box
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x000F, 0x003C);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x000F, 0x003C, x);'
-  - platform: template
-    name: "Applique Devant Puissance"
-    icon: mdi:brightness-percent
-    unit_of_measurement: "%"
-    min_value: 1
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0013, 0x002E);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0013, 0x002E, x);'
-  - platform: template
-    name: "Applique Devant Lumière de base"
-    icon: mdi:lightbulb-night-outline
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0013, 0x0030);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0013, 0x0030, x);'
-  - platform: template
-    name: "Applique Devant Temporisation"
-    icon: mdi:timer-outline
-    unit_of_measurement: "s"
-    min_value: 1
-    max_value: 3600
-    step: 1
-    mode: box
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0013, 0x003C);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0013, 0x003C, x);'
-  - platform: template
-    name: "Applique Garage Puissance"
-    icon: mdi:brightness-percent
-    unit_of_measurement: "%"
-    min_value: 1
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0017, 0x002E);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0017, 0x002E, x);'
-  - platform: template
-    name: "Applique Garage Lumière de base"
-    icon: mdi:lightbulb-night-outline
-    unit_of_measurement: "%"
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0017, 0x0030);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0017, 0x0030, x);'
-  - platform: template
-    name: "Applique Garage Temporisation"
-    icon: mdi:timer-outline
-    unit_of_measurement: "s"
-    min_value: 1
-    max_value: 3600
-    step: 1
-    mode: box
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_lc_prop(0x0017, 0x003C);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_lc_prop(0x0017, 0x003C, x);'
-  - platform: template
-    name: "Applique Devant Seuil"
-    icon: mdi:brightness-6
-    unit_of_measurement: lx
-    min_value: 1
-    max_value: 40
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_threshold(0x0013);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_threshold(0x0013, x);'
-  - platform: template
-    name: "Applique Garage Seuil"
-    icon: mdi:brightness-6
-    unit_of_measurement: lx
-    min_value: 1
-    max_value: 40
-    step: 1
-    mode: slider
-    update_interval: 1s
-    lambda: |-
-      static float last = NAN;
-      const float v = id(nightmatiq_gateway).lamp_threshold(0x0017);
-      if (std::isnan(v) || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_threshold(0x0017, x);'
-  - platform: template
-    id: nightmatiq_threshold
-    name: "Applique Entrée Seuil"
-    icon: mdi:brightness-6
-    unit_of_measurement: lx
-    min_value: 1
-    max_value: 40
-    step: 1
-    mode: slider
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_threshold(x);'
-
-select:
-  - platform: template
-    name: "Applique Devant Mode"
-    icon: mdi:theme-light-dark
-    options: ["Auto", "Always On", "Always Off"]
-    update_interval: 1s
-    lambda: |-
-      static std::string last;
-      auto *m = id(nightmatiq_gateway);
-      const int lc = m->lamp_lc_mode(0x0013);
-      const int out = m->lamp_output(0x0013);
-      std::string v;
-      if (lc == 1) v = "Auto";
-      else if (lc == 0 && out == 1) v = "Always On";
-      else if (lc == 0 && out == 0) v = "Always Off";
-      if (v.empty() || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_mode(0x0013, x);'
-  - platform: template
-    name: "Applique Garage Mode"
-    icon: mdi:theme-light-dark
-    options: ["Auto", "Always On", "Always Off"]
-    update_interval: 1s
-    lambda: |-
-      static std::string last;
-      auto *m = id(nightmatiq_gateway);
-      const int lc = m->lamp_lc_mode(0x0017);
-      const int out = m->lamp_output(0x0017);
-      std::string v;
-      if (lc == 1) v = "Auto";
-      else if (lc == 0 && out == 1) v = "Always On";
-      else if (lc == 0 && out == 0) v = "Always Off";
-      if (v.empty() || v == last) return {};
-      last = v;
-      return v;
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_lamp_mode(0x0017, x);'
-  - platform: template
-    id: nightmatiq_mode
-    name: "Applique Entrée Mode"
-    icon: mdi:theme-light-dark
-    optimistic: true
-    restore_value: true
-    initial_option: "Auto"
-    options:
-      - "Auto"
-      - "Always On"
-      - "Always Off"
-    set_action:
-      - lambda: 'id(nightmatiq_gateway).set_mode(x);'
-
-text_sensor:
-  - platform: template
-    name: "Applique Devant Firmware"
-    icon: mdi:chip
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static std::string last;
-      const std::string v = id(nightmatiq_gateway).lamp_firmware(0x0013);
-      if (v.empty() || v == last) return {};
-      last = v;
-      return v;
-  - platform: template
-    name: "Applique Devant Fabricant"
-    icon: mdi:factory
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("Steinel GmbH");'
-  - platform: template
-    name: "Applique Devant Company ID"
-    icon: mdi:identifier
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("0x0563 (Steinel GmbH)");'
-  - platform: template
-    name: "Applique Devant Product ID"
-    icon: mdi:identifier
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("0x1e79");'
-  - platform: template
-    name: "Applique Garage Firmware"
-    icon: mdi:chip
-    update_interval: 1s
-    entity_category: diagnostic
-    lambda: |-
-      static std::string last;
-      const std::string v = id(nightmatiq_gateway).lamp_firmware(0x0017);
-      if (v.empty() || v == last) return {};
-      last = v;
-      return v;
-  - platform: template
-    name: "Applique Garage Fabricant"
-    icon: mdi:factory
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("Steinel GmbH");'
-  - platform: template
-    name: "Applique Garage Company ID"
-    icon: mdi:identifier
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("0x0563 (Steinel GmbH)");'
-  - platform: template
-    name: "Applique Garage Product ID"
-    icon: mdi:identifier
-    update_interval: 3600s
-    entity_category: diagnostic
-    lambda: 'return std::string("0x1e79");'
-  - platform: template
-    id: nightmatiq_status
-    name: "Gateway Status"
-    icon: mdi:bluetooth-connect
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_firmware_version
-    name: "Applique Entrée Firmware"
-    icon: mdi:chip
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_manufacturer
-    name: "Applique Entrée Fabricant"
-    icon: mdi:factory
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_company_id
-    name: "Applique Entrée Company ID"
-    icon: mdi:identifier
-    entity_category: diagnostic
-  - platform: template
-    id: nightmatiq_product_id
-    name: "Applique Entrée Product ID"
-    icon: mdi:identifier
     entity_category: diagnostic
 
 interval:
@@ -823,7 +226,7 @@ interval:
           else if (!ha) net = (tick % 8) == 0;
           else net = true;
           if (net) id(network_led).turn_on(); else id(network_led).turn_off();
-          const bool ble = id(nightmatiq_mesh_ready).state || (tick % 4) < 2;
+          const bool ble = id(nightmatiq_gateway).mesh_ready() || (tick % 4) < 2;
           if (ble) id(bluetooth_led).turn_on(); else id(bluetooth_led).turn_off();
   - interval: 3s
     then:

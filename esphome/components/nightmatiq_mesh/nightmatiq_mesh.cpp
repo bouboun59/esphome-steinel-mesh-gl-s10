@@ -937,6 +937,11 @@ void NightmatiqMesh::setup() {
   const bool has_config = this->load_config_();
   if (has_config) {
     this->load_device_key_();
+    if (!this->device_key_valid_ && this->primary_device_key_fallback_valid_) {
+      this->device_key_ = this->primary_device_key_fallback_;
+      this->device_key_valid_ = true;
+      ESP_LOGI(TAG, "DeviceKey lampe principale absente de la flash : cle du YAML utilisee");
+    }
     this->mesh_mode_enabled_ =
         (this->config_.flags & (FLAG_ENABLED | FLAG_REMOVE_PENDING)) != 0;
   }
@@ -1559,44 +1564,53 @@ static constexpr uint32_t RELAY_REFRESH_MS = 3600000;
 static constexpr int32_t RELAY_MESSAGE_TIMEOUT_MS = 4000;
 static constexpr uint32_t RELAY_WATCHDOG_MS = 9000;
 
-void NightmatiqMesh::set_lamp_device_key(uint16_t base, const std::string &hex) {
-  ExtraLamp *lamp = nullptr;
-  for (size_t i = 0; i < this->extra_count_; i++)
-    if (this->extra_[i].base == base)
-      lamp = &this->extra_[i];
-  if (lamp == nullptr) {
-    ESP_LOGW(TAG, "DeviceKey ignoree : lampe 0x%04X inconnue (appeler add_lamp avant)", base);
-    return;
-  }
+bool NightmatiqMesh::parse_device_key_(const std::string &hex, std::array<uint8_t, 16> &key) {
   const auto nibble = [](char c) -> int {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     return -1;
   };
-  std::array<uint8_t, 16> key{};
-  if (hex.size() != 32) {
-    ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : 32 caracteres hexa attendus (%u recus)", base,
-             static_cast<unsigned>(hex.size()));
-    return;
-  }
+  if (hex.size() != 32)
+    return false;
   for (size_t i = 0; i < key.size(); i++) {
     const int hi = nibble(hex[2 * i]);
     const int lo = nibble(hex[2 * i + 1]);
-    if (hi < 0 || lo < 0) {
-      ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : caractere non hexadecimal", base);
-      return;
-    }
+    if (hi < 0 || lo < 0)
+      return false;
     key[i] = static_cast<uint8_t>((hi << 4) | lo);
   }
-  if (std::all_of(key.begin(), key.end(), [](uint8_t v) { return v == 0; })) {
-    ESP_LOGW(TAG, "DeviceKey lampe 0x%04X : cle nulle ignoree", base);
+  return !std::all_of(key.begin(), key.end(), [](uint8_t v) { return v == 0; });
+}
+
+void NightmatiqMesh::set_lamp_device_key(uint16_t base, const std::string &hex) {
+  ExtraLamp *lamp = nullptr;
+  for (size_t i = 0; i < this->extra_count_; i++)
+    if (this->extra_[i].base == base)
+      lamp = &this->extra_[i];
+  if (lamp == nullptr) {
+    ESP_LOGW(TAG, "DeviceKey ignoree : lampe 0x%04X inconnue (declarer la lampe avant)", base);
+    return;
+  }
+  std::array<uint8_t, 16> key{};
+  if (!parse_device_key_(hex, key)) {
+    ESP_LOGW(TAG, "DeviceKey lampe 0x%04X invalide (32 caracteres hexa attendus)", base);
     return;
   }
   lamp->dev_key = key;
   lamp->dev_key_valid = true;
   // La cle elle-meme n'est jamais journalisee.
   ESP_LOGI(TAG, "Lampe 0x%04X : DeviceKey configuree", base);
+}
+
+void NightmatiqMesh::set_primary_device_key(const std::string &hex) {
+  std::array<uint8_t, 16> key{};
+  if (!parse_device_key_(hex, key)) {
+    ESP_LOGW(TAG, "DeviceKey lampe principale invalide (32 caracteres hexa attendus)");
+    return;
+  }
+  this->primary_device_key_fallback_ = key;
+  this->primary_device_key_fallback_valid_ = true;
 }
 
 void NightmatiqMesh::apply_extra_device_keys_() {

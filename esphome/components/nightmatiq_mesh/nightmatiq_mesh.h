@@ -106,6 +106,8 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   // base = adresse unicast de la lampe (0x000F pour la lampe principale).
   // DeviceKey d'une lampe supplementaire : 32 caracteres hexa, issue du backup Steinel.
   void set_lamp_device_key(uint16_t base, const std::string &hex);
+  // Secours : DeviceKey de la lampe principale si la flash n'en contient pas.
+  void set_primary_device_key(const std::string &hex);
   // -1 inconnu, 0 desactive, 1 active, 2 non supporte par la lampe
   int lamp_relay(uint16_t base) const;
   // Retransmissions relais (count, interval_ms), -1 si inconnu
@@ -115,6 +117,7 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   void request_relay_refresh();
   int motion_raw() const { return this->motion_raw_.load(); }
   bool mesh_mode_enabled() const { return this->mesh_mode_enabled_; }
+  bool mesh_ready() const { return this->mesh_ready_.load(); }
 
   static void provisioning_callback(esp_ble_mesh_prov_cb_event_t event, esp_ble_mesh_prov_cb_param_t *param);
   static void config_callback(esp_ble_mesh_cfg_client_cb_event_t event,
@@ -453,6 +456,9 @@ class NightmatiqMesh final : public PollingComponent, public AsyncWebHandler {
   void advance_relay_(uint32_t now);
   void handle_relay_status_(esp_ble_mesh_cfg_client_cb_event_t event,
                             esp_ble_mesh_cfg_client_cb_param_t *param);
+  std::array<uint8_t, 16> primary_device_key_fallback_{};
+  bool primary_device_key_fallback_valid_{false};
+  static bool parse_device_key_(const std::string &hex, std::array<uint8_t, 16> &key);
   std::atomic<int> primary_relay_{-1};
   std::atomic<int> primary_relay_rt_count_{-1};
   std::atomic<int> primary_relay_rt_interval_{-1};
