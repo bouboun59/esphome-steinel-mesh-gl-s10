@@ -478,7 +478,7 @@ nightmatiq_mesh:
 
 Le composant crée lui-même, pour chaque lampe, les entités « `<nom>` Lumière, Mouvement, Mouvement niveau, Signal,
 Luminosité, Révision matérielle, Intensité, Puissance, Lumière de base, Temporisation, Seuil, Mode, Firmware,
-Fabricant, Company ID, Product ID, Relais Mesh », plus « Gateway Mesh Ready / Status / Refresh » et
+Fabricant, Company ID, Product ID, Relais Mesh, Relais Mesh retransmission », plus « Gateway Mesh Ready / Status / Refresh » et
 « Relais Mesh Relire ». Les noms sont ceux de l'ancien YAML : les entity_id Home Assistant sont conservés.
 
 Chaque entité se surcharge (dictionnaire) ou se supprime (`false`) sous sa clé :
@@ -493,7 +493,7 @@ Chaque entité se surcharge (dictionnaire) ou se supprime (`false`) sous sa clé
 
 Clés disponibles : `light`, `motion`, `motion_level`, `hardware`, `signal`, `illuminance`, `intensity`, `power`,
 `base_light`, `run_on`, `threshold`, `mode`, `firmware`, `manufacturer_text`, `company_id_text`, `product_id_text`,
-`relay` ; pour la passerelle (`gateway:`) : `mesh_ready`, `status`, `refresh`, `relay_refresh`.
+`relay`, `relay_retransmit` ; pour la passerelle (`gateway:`) : `mesh_ready`, `status`, `refresh`, `relay_refresh`.
 `lc_props: false` sur une lampe supprime ses quatre réglages du détecteur.
 
 L'ancien mode (lambda `on_boot` + `lux_sensor_id`, `mode_select_id`… vers des entités template) reste accepté.

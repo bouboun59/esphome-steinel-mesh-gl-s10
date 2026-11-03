@@ -469,11 +469,11 @@ nightmatiq_mesh:
 
 For every lamp the component creates the "`<name>` Lumière, Mouvement, Mouvement niveau, Signal, Luminosité,
 Révision matérielle, Intensité, Puissance, Lumière de base, Temporisation, Seuil, Mode, Firmware, Fabricant,
-Company ID, Product ID, Relais Mesh" entities, plus "Gateway Mesh Ready / Status / Refresh" and "Relais Mesh Relire".
+Company ID, Product ID, Relais Mesh, Relais Mesh retransmission" entities, plus "Gateway Mesh Ready / Status / Refresh" and "Relais Mesh Relire".
 Names match the previous YAML, so Home Assistant entity_ids are kept. Override an entity with a dict under its key
 (`signal: {internal: true}`) or drop it with `false` (`relay: false`). Keys: `light`, `motion`, `motion_level`,
 `hardware`, `signal`, `illuminance`, `intensity`, `power`, `base_light`, `run_on`, `threshold`, `mode`, `firmware`,
-`manufacturer_text`, `company_id_text`, `product_id_text`, `relay`; gateway: `mesh_ready`, `status`, `refresh`,
+`manufacturer_text`, `company_id_text`, `product_id_text`, `relay`, `relay_retransmit`; gateway: `mesh_ready`, `status`, `refresh`,
 `relay_refresh`. The legacy `on_boot` lambda + `*_id` options still work.
 
 ---

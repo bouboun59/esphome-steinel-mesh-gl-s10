@@ -191,6 +191,9 @@ ENTITIES = {
     "relay": dict(platform="switch", suffix="Relais Mesh", role="both",
                   schema=lambda cls: switch.switch_schema(
                       cls, icon="mdi:access-point-network", entity_category=ENTITY_CATEGORY_CONFIG)),
+    "relay_retransmit": dict(platform="text_sensor", suffix="Relais Mesh retransmission", role="both",
+                             schema=lambda cls: text_sensor.text_sensor_schema(
+                                 cls, icon="mdi:repeat", entity_category=ENTITY_CATEGORY_DIAGNOSTIC)),
 }
 
 # Classe C++ par entite, selon que la lampe est la principale ou une supplementaire
@@ -212,6 +215,7 @@ CLASSES = {
     "company_id_text": (LampTextSensor, text_sensor.TextSensor),
     "product_id_text": (LampTextSensor, text_sensor.TextSensor),
     "relay": (LampRelaySwitch, LampRelaySwitch),
+    "relay_retransmit": (LampTextSensor, LampTextSensor),
 }
 
 # Entites de la principale alimentees directement par le hub (pas de polling)
@@ -476,6 +480,8 @@ async def _lamp_entities(hub, lamp, primary):
             var = await text_sensor.new_text_sensor(conf)
             if key == "firmware":
                 cg.add(var.set_kind(LampTextKind.FIRMWARE))
+            elif key == "relay_retransmit":
+                cg.add(var.set_kind(LampTextKind.RELAY_RETRANSMIT))
             else:
                 cg.add(var.set_kind(LampTextKind.CONSTANT))
                 text = {

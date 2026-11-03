@@ -5,6 +5,7 @@
 // comme le faisaient les anciens capteurs template du YAML.
 
 #include <cmath>
+#include <cstdio>
 #include <string>
 
 #include "esphome/core/component.h"
@@ -205,15 +206,33 @@ class PrimaryModeSelect : public select::Select, public Component, public LampCh
 };
 
 // --------------------------------------------------------------- textes
-enum class LampTextKind : uint8_t { FIRMWARE, CONSTANT };
+enum class LampTextKind : uint8_t { FIRMWARE, CONSTANT, RELAY_RETRANSMIT };
 
 class LampTextSensor : public text_sensor::TextSensor, public PollingComponent, public LampChild {
  public:
   void set_kind(LampTextKind kind) { this->kind_ = kind; }
   void set_constant(const std::string &value) { this->constant_ = value; }
   void update() override {
-    const std::string value =
-        this->kind_ == LampTextKind::FIRMWARE ? this->parent_->lamp_firmware(this->base_) : this->constant_;
+    std::string value;
+    switch (this->kind_) {
+      case LampTextKind::FIRMWARE:
+        value = this->parent_->lamp_firmware(this->base_);
+        break;
+      case LampTextKind::CONSTANT:
+        value = this->constant_;
+        break;
+      case LampTextKind::RELAY_RETRANSMIT: {
+        // Config Relay Status : N retransmissions en plus de l'emission initiale
+        const int count = this->parent_->lamp_relay_retransmit_count(this->base_);
+        const int interval = this->parent_->lamp_relay_retransmit_interval(this->base_);
+        if (count >= 0 && interval >= 0) {
+          char text[40];
+          std::snprintf(text, sizeof(text), "%d emission%s / %d ms", count + 1, count > 0 ? "s" : "", interval);
+          value = text;
+        }
+        break;
+      }
+    }
     if (value.empty() || (this->has_state() && value == this->state))
       return;
     this->publish_state(value);
